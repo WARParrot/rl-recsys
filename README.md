@@ -10,7 +10,19 @@ This repository is intentionally separate from the existing feature-search artif
 
 It is **not** causal offline policy evaluation and does not establish user satisfaction or retention. Generated items are not observed user actions. The primary report must remain qualified unless returned metrics satisfy the declared protocol in `PLAN.md` and the generated `audit.json`, `provenance.json`, `selection.json`, and `results.json` agree.
 
-## GPU setup (your RTX machine)
+## One-command Windows setup
+
+On Windows, open **Command Prompt** in the cloned repository and run:
+
+```bat
+run_windows.bat
+```
+
+The script installs Python 3.11 with `winget` if needed, creates `.venv`, installs the CUDA PyTorch wheel, runs the CUDA forward/backward preflight and tests, downloads/prepares Yambda, then starts exactly one pilot training job and its final evaluation. It does not use PowerShell activation, so it can be started directly from `cmd.exe`. Logs are written to `logs\\`.
+
+If the script stops at the PyTorch step, check the official CUDA wheel selector at [pytorch.org](https://pytorch.org/get-started/locally/) and update the wheel URL in `run_windows.bat`. Do not continue if the preflight reports `CUDA is unavailable`.
+
+## GPU setup (manual alternative)
 
 Use Python 3.11 or 3.12 and a fresh environment. Install a PyTorch wheel appropriate for your CUDA driver from [pytorch.org](https://pytorch.org/get-started/locally/), then install this project without replacing torch:
 
