@@ -8,10 +8,10 @@ version = "0.1.0"
 description = "Auditable GPT-2 recommendation and model-based RL experiment"
 requires-python = ">=3.11,<3.13"
 # Install torch separately using the CUDA wheel selected for the target GPU/driver.
-dependencies = ["transformers==4.56.2", "numpy==2.2.6", "pyarrow==21.0.0"]
+dependencies = ["transformers==5.20.2", "numpy==2.2.6", "pyarrow==26.0.0"]
 
 [project.optional-dependencies]
-test = ["pytest==8.4.2"]
+test = ["pytest==9.1.1"]
 
 [project.scripts]
 rl-recsys = "rl_recsys.cli:main"

@@ -43,7 +43,11 @@ PY
 pytest -q
 ```
 
-The RTX 5060 Ti has to pass that real forward/backward check. If the wheel rejects the GPU architecture, install the PyTorch build recommended for the installed driver; do not proceed on a CPU fallback.
+The RTX 5060 Ti has to pass that real forward/backward check. If the wheel rejects the GPU architecture, install the PyTorch build recommended for the installed driver; do not proceed on a CPU fallback. The project pins the audited non-torch dependencies; the CUDA PyTorch wheel is intentionally installed separately because its index and version must match the driver/GPU.
+
+## Dependency and security status
+
+The dependency set was checked with `pip-audit` on 2026-10-23. The updated environment (`transformers 5.20.2`, `pyarrow 26.0.0`, `numpy 2.5.4`, `pytest 9.1.1`) reported **no known vulnerabilities**. `pip-audit` cannot resolve the local package or the CUDA-index PyTorch wheel through its advisory database; this is not evidence that PyTorch is vulnerability-free. Install PyTorch only from the official PyTorch index, keep NVIDIA drivers updated, and review the installed versions with `pip list` and `pip-audit --local` before training. Do not execute untrusted model files; this project only loads its own checkpoints with `weights_only=True`.
 
 ## Data and bounded run
 
