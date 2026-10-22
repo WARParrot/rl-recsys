@@ -91,7 +91,7 @@ if errorlevel 1 (
 )
 
 echo [8/8] Starting pilot training. This is the only training command in the script.
-"%PY%" -m rl_recsys.cli train --config configs/pilot.json --data data/prepared --run runs\pilot-seed42 > logs\training.log 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { & '%PY%' -m rl_recsys.cli train --config configs/pilot.json --data data/prepared --run runs\pilot-seed42 2>&1 | Tee-Object -FilePath logs\training.log; exit $LASTEXITCODE }"
 if errorlevel 1 (
   type logs\training.log
   echo Training failed. The full log is logs\training.log
@@ -99,7 +99,7 @@ if errorlevel 1 (
 )
 
 echo Running final evaluation...
-"%PY%" -m rl_recsys.cli evaluate --data data/prepared --run runs\pilot-seed42 > runs\pilot-seed42\final-evaluation.json 2> logs\evaluation.log
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { & '%PY%' -m rl_recsys.cli evaluate --data data/prepared --run runs\pilot-seed42 2>&1 | Tee-Object -FilePath logs\evaluation.log | Out-File -FilePath runs\pilot-seed42\final-evaluation.json -Encoding utf8; exit $LASTEXITCODE }"
 if errorlevel 1 (
   type logs\evaluation.log
   exit /b 1
@@ -111,6 +111,7 @@ echo   data\prepared\audit.json
 echo   runs\pilot-seed42\provenance.json
 echo   runs\pilot-seed42\selection.json
 echo   runs\pilot-seed42\candidates.json
+echo   runs\pilot-seed42\progress.jsonl
 echo   runs\pilot-seed42\results.json
 echo   logs\training.log
 echo   logs\evaluation.log

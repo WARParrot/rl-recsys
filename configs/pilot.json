@@ -14,13 +14,14 @@
   },
   "model": {"hidden": 128, "layers": 4, "heads": 4, "dropout": 0.0},
   "train": {
-    "batch_size": 64,
+    "batch_size": 512,
     "sft_steps": 5000,
     "reward_steps": 3000,
     "rl_steps": 1000,
     "lr": 0.0003,
     "rl_lr": 0.00001,
     "eval_every": 500,
+    "progress_every": 50,
     "grad_clip": 1.0,
     "max_hours": 36,
     "threads": 4,
@@ -35,5 +36,5 @@
     "rerank_weight": 1.0,
     "relevance_floor": 0.98
   },
-  "evaluation": {"k": 10, "batch_size": 128, "bootstrap": 2000, "bootstrap_seed": 2026, "rollout_samples": 1, "max_minutes": 120}
+  "evaluation": {"k": 10, "batch_size": 512, "bootstrap": 2000, "bootstrap_seed": 2026, "rollout_samples": 1, "max_minutes": 120}
 }

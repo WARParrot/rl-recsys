@@ -34,6 +34,9 @@ def seed_all(seed, threads):
     torch.set_num_threads(threads)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+        # RTX 50-series benefits from TF32 for matmul; this changes numerics, not the protocol.
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
     # Reproducible seeds, not a bitwise cross-device determinism promise.
 
 
@@ -101,6 +104,21 @@ def timed_out(deadline):
     return time.monotonic() >= deadline
 
 
+def progress_record(path, phase, step, total, started, **fields):
+    elapsed = max(time.monotonic() - started, 1e-6)
+    record = {"kind": "progress", "phase": phase, "step": step, "total_steps": total,
+              "elapsed_seconds": elapsed, "steps_per_second": step / elapsed,
+              "eta_seconds": max(total - step, 0) * elapsed / max(step, 1), **fields}
+    if torch.cuda.is_available():
+        record.update(gpu_allocated_mb=round(torch.cuda.memory_allocated() / 2**20, 1),
+                      gpu_reserved_mb=round(torch.cuda.memory_reserved() / 2**20, 1))
+    line = json.dumps(record)
+    print(line, flush=True)
+    if path is not None:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
+
 def check_deadline(deadline, label):
     if deadline is not None and timed_out(deadline):
         raise TimeoutError(f"Deadline reached during {label}")
@@ -124,12 +142,13 @@ def validation_loss(model, subset, cfg, device, reward=False, deadline=None):
     return macro(np.array(losses), subset["uid"])[0]
 
 
-def fit_supervised(model, fit, valid, steps, path, cfg, device, deadline, reward=False):
+def fit_supervised(model, fit, valid, steps, path, cfg, device, deadline, reward=False, progress_path=None, phase="supervised"):
     rng = np.random.default_rng(cfg["seed"] + (101 if reward else 0))
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg["train"]["lr"])
     best = float("inf")
     log = []
     start = time.monotonic()
+    progress_every = cfg["train"].get("progress_every", cfg["train"]["eval_every"])
     for step in range(steps):
         if timed_out(deadline):
             raise TimeoutError("Job deadline reached; final evaluation intentionally not run")
@@ -141,6 +160,8 @@ def fit_supervised(model, fit, valid, steps, path, cfg, device, deadline, reward
         else:
             loss = F.cross_entropy(model(b["context"]), b["target"] - 2)
         norm = optimize_step(loss, model, optimizer, cfg)
+        if (step + 1) % progress_every == 0 or step + 1 == steps:
+            progress_record(progress_path, phase, step + 1, steps, start, loss=float(loss), grad_norm=norm)
         if (step + 1) % cfg["train"]["eval_every"] == 0 or step + 1 == steps:
             val = validation_loss(model, valid, cfg, device, reward, deadline)
             record = {"step": step + 1, "loss": float(loss), "calibration_loss": val,
@@ -162,12 +183,14 @@ def freeze(model):
     return model
 
 
-def train_rl(policy, reference, rm, fit, cfg, device, beta, horizon, reward_index, deadline):
+def train_rl(policy, reference, rm, fit, cfg, device, beta, horizon, reward_index, deadline, progress_path=None, phase="rl"):
     """Current-policy samples in deterministic append-item simulator, NOT users."""
     optimizer = torch.optim.AdamW(policy.parameters(), lr=cfg["train"]["rl_lr"])
     rng = np.random.default_rng(cfg["seed"] + 999)
     temperature = cfg["rl"]["sampling_temperature"]
     log = []
+    start = time.monotonic()
+    progress_every = cfg["train"].get("progress_every", cfg["train"]["eval_every"])
     for step in range(cfg["train"]["rl_steps"]):
         if timed_out(deadline):
             raise TimeoutError("RL deadline reached")
@@ -189,6 +212,10 @@ def train_rl(policy, reference, rm, fit, cfg, device, beta, horizon, reward_inde
             context = append_action(context, action)
         loss = reinforce_loss(logprobs, rewards, kls, beta)
         optimize_step(loss, policy, optimizer, cfg)
+        if (step + 1) % progress_every == 0 or step + 1 == cfg["train"]["rl_steps"]:
+            progress_record(progress_path, phase, step + 1, cfg["train"]["rl_steps"], start,
+                            loss=float(loss), proxy_reward=float(torch.stack(rewards).mean()),
+                            exact_kl=float(torch.stack(kls).mean()), horizon=horizon)
         if (step + 1) % cfg["train"]["eval_every"] == 0 or step + 1 == cfg["train"]["rl_steps"]:
             record = {"step": step + 1, "loss": float(loss),
                       "proxy_reward": float(torch.stack(rewards).mean()),
@@ -218,12 +245,17 @@ def train(config, data_dir, run_dir):
     args = model_args(data, cfg)
     policy = Policy(*args).to(device)
     logs = {}
-    logs["sft"] = fit_supervised(policy, fit, calibration, cfg["train"]["sft_steps"], run / "sft.pt", cfg, device, deadline)
+    progress_path = run / "progress.jsonl"
+    progress_path.write_text("", encoding="utf-8")
+    logs["sft"] = fit_supervised(policy, fit, calibration, cfg["train"]["sft_steps"], run / "sft.pt", cfg, device, deadline,
+                                  progress_path=progress_path, phase="sft")
     rm = RewardModel(*args).to(device)
-    logs["reward"] = fit_supervised(rm, fit, calibration, cfg["train"]["reward_steps"], run / "reward.pt", cfg, device, deadline, True)
+    logs["reward"] = fit_supervised(rm, fit, calibration, cfg["train"]["reward_steps"], run / "reward.pt", cfg, device, deadline, True,
+                                    progress_path=progress_path, phase="reward")
     torch.manual_seed(cfg["seed"] + 12345)
     auditor = RewardModel(*args, mean_history=True).to(device)
-    logs["auditor"] = fit_supervised(auditor, fit, calibration, cfg["train"]["reward_steps"], run / "auditor.pt", cfg, device, deadline, True)
+    logs["auditor"] = fit_supervised(auditor, fit, calibration, cfg["train"]["reward_steps"], run / "auditor.pt", cfg, device, deadline, True,
+                                      progress_path=progress_path, phase="auditor")
     reference = freeze(copy.deepcopy(policy))
     freeze(rm)
     freeze(auditor)
@@ -238,7 +270,8 @@ def train(config, data_dir, run_dir):
                 candidate = restore(run / "sft.pt", Policy(*args), device)
                 # Equal initial stochastic conditions; each candidate has fixed training budget.
                 torch.manual_seed(cfg["seed"] + 999)
-                logs[name] = train_rl(candidate, reference, rm, fit, cfg, device, beta, horizon, reward_index, deadline)
+                logs[name] = train_rl(candidate, reference, rm, fit, cfg, device, beta, horizon, reward_index, deadline,
+                                       progress_path=progress_path, phase=name)
                 checkpoint(run / f"{name}.pt", candidate)
                 summary, _ = evaluate(candidate, rm, auditor, selection, data, cfg, device, deadline=deadline)
                 candidates.append({"name": name, "reward": reward_name, "horizon": horizon,

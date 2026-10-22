@@ -96,7 +96,7 @@ def evaluate(policy, rm, auditor, subset, data, cfg, device, mode="policy", dead
 
 
 @torch.no_grad()
-def rollout_diagnostics(policy, rm, auditor, subset, cfg, device, horizon=5):
+def rollout_diagnostics(policy, rm, auditor, subset, cfg, device, horizon=5, deadline=None):
     """Synthetic context only: not measured user transitions/session value."""
     result = []
     bs = cfg["evaluation"]["batch_size"]
