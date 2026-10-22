@@ -1,0 +1,39 @@
+{
+  "name": "yambda-restricted-pilot-v1",
+  "seed": 42,
+  "data": {
+    "revision": "dd6f3a19eef5866e346c3270e098baa641a44948",
+    "sha256": "eed9cbd094af1e189507d2f8132a0dc9653b90e65480125c7cdccd601e0592d1",
+    "users": 1000,
+    "catalog_size": 20000,
+    "context_length": 64,
+    "quantiles": [0.7, 0.8, 0.9],
+    "max_train": 250000,
+    "max_valid": 10000,
+    "max_test": 10000
+  },
+  "model": {"hidden": 128, "layers": 4, "heads": 4, "dropout": 0.0},
+  "train": {
+    "batch_size": 64,
+    "sft_steps": 5000,
+    "reward_steps": 3000,
+    "rl_steps": 1000,
+    "lr": 0.0003,
+    "rl_lr": 0.00001,
+    "eval_every": 500,
+    "grad_clip": 1.0,
+    "max_hours": 36,
+    "threads": 4,
+    "allow_cpu": false
+  },
+  "rl": {
+    "betas": [0.01, 0.1, 1.0],
+    "horizons": [1, 5],
+    "rewards": ["completion", "seconds"],
+    "seconds_cap": 600.0,
+    "sampling_temperature": 1.0,
+    "rerank_weight": 1.0,
+    "relevance_floor": 0.98
+  },
+  "evaluation": {"k": 10, "batch_size": 128, "bootstrap": 2000, "bootstrap_seed": 2026, "rollout_samples": 1, "max_minutes": 120}
+}
