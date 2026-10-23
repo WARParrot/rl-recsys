@@ -10,6 +10,12 @@ This repository is intentionally separate from the existing feature-search artif
 
 It is **not** causal offline policy evaluation and does not establish user satisfaction or retention. Generated items are not observed user actions. The primary report must remain qualified unless returned metrics satisfy the declared protocol in `PLAN.md` and the generated `audit.json`, `provenance.json`, `selection.json`, and `results.json` agree.
 
+## Results and revised measurement
+
+Read [REPORT.md](REPORT.md) for the **historical negative-result pilot** and [RESEARCH_UPGRADE.md](RESEARCH_UPGRADE.md) for the post-audit protocol amendment. The current code has not produced new GPU research results. The historical run has an unresolved source-byte hash discrepancy; its internal metadata consistency is not proof of exact source identity.
+
+Current evaluation uses 16 action samples per context, four synthetic rollout replicates, held-out validation for both reward heads, and consistent eligible-target reward selection/comparison. Rollouts additionally report initial-list overlap and policy entropy; these measure recommendation change, not user-state OOD or satisfaction. The higher sampling budget needs a fresh runtime preflight. New training provenance embeds exact Python source bytes and installed package versions; final evaluation rejects code-hash changes and saves `evaluation-provenance.json`. Do not alter historical manifests to bypass this guard.
+
 ## One-command Windows setup
 
 On Windows, open **Command Prompt** in the cloned repository and run:
@@ -61,29 +67,20 @@ rl-recsys train --config configs/pilot.json --data data/prepared --run runs/pilo
 rl-recsys evaluate --data data/prepared --run runs/pilot-seed42 > runs/pilot-seed42/final-evaluation.json
 ```
 
-The first run is deliberately restricted to 1,000 deterministic users and 20,000 train-known items. It is a feasibility/pilot estimand, not a full Yambda benchmark. `train` refuses CPU unless `allow_cpu` is explicitly enabled, refuses overwriting a run, and saves environment/code/data provenance. It selects checkpoints only on the selection interval; `evaluate` is a one-way final test step and refuses changed checkpoints/data.
+The primary test period has already been inspected and protocol changes were made after that inspection. The existing sample is therefore descriptive and exploratory, not a fresh confirmatory set. The checked-in `configs/pilot.json` retains this restricted pilot setup for smoke/readiness work; before any full GPU run, the operator must freeze a genuinely later untouched evaluation period or explicitly accept an exploratory reuse analysis. The new generated `results.json` labels reused-test outcomes accordingly.
 
-For the RTX run, first use the config as-is. The pilot uses batch size 512 rather than 64 to avoid leaving a 16 GB GPU underutilized; reduce it to 256 if VRAM is too high. Progress records every 50 optimizer steps with phase, step/total, steps/sec, ETA, loss, KL/reward where relevant, and GPU allocated/reserved memory. Record wall time, peak VRAM, and failures. Do not increase catalog or steps until the pilot is finite and memory-safe. Full 934k-item softmax is a separate scaling experiment, not implied by pilot results.
+Do not launch the full historical grid directly after preflight. First run the frozen supervised/reward audit and validate both reward heads against simple baselines on a separate time-forward audit role. The current CLI preflight checks a small representative policy and reward forward/backward pass, not end-to-end runtime or peak memory for the full grid. Only proceed to a reduced H=1 experiment if measured GPU throughput/memory fits the budget; retain H=5 as a later extension.
 
 Low CPU utilization is not by itself a fault: this model is intentionally GPU-bound and uses small fixed tensors. Check `nvidia-smi` for GPU utilization and VRAM. If GPU utilization is also low, inspect `progress.jsonl` and the phase/ETA before increasing CPU threads.
 
 ## Data caveats
 
-- Timestamps are 5-second bins; rows tied within a user/bin are not ordered as true behavior. Ambiguous timestamp groups are excluded from target construction.
+- Timestamps are 5-second bins; rows tied within a user/bin are not ordered as true behavior. Ambiguous timestamp groups are excluded from both targets and histories.
 - `played_ratio_pct > 100` is valid rewind/replay behavior. The completion reward is bounded at 1; the seconds reward is a capped proxy, not wall-clock listening time.
 - Logged listens are conditional on exposure and user choice. Reward-model scores do not identify causal recommendation effects.
 - Repeats are allowed for every policy and reported separately.
 - User bootstrap intervals are conditional on a training seed; repeated seeds are required for robustness.
 
-## Git handoff
+## Research artifact handoff
 
-Do not commit `.venv`, downloaded data, model checkpoints, or results. After review:
-
-```bash
-git add .
-git commit -m 'Add auditable GPT-2 recommendation RL experiment'
-git remote add origin <REMOTE_URL>
-git push -u origin main
-```
-
-The author will provide the remote URL after local tests and independent code audit are complete.
+Keep `.venv` and downloaded data out of Git. Publish checkpoints, `per_example.npz`, metadata, logs, checksums and the resolved environment through a release/artifact store, not only prose tables. Source bytes are embedded in new provenance to preserve platform-specific byte identity. Seeds do not promise bitwise cross-device reproducibility. The generic CUDA install command above is a supported fresh setup, not an exact reconstruction of the historical Windows environment.

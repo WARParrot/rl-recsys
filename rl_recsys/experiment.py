@@ -1,5 +1,6 @@
 """Bounded training jobs; selection and final test separated on disk."""
 from __future__ import annotations
+import base64
 import copy
 import hashlib
 import importlib.metadata
@@ -16,7 +17,9 @@ from torch.nn import functional as F
 
 from .data import load_prepared, role, sha256
 from .models import Policy, RewardModel, append_action, reinforce_loss
-from .evaluate import evaluate, macro, paired_interval, rollout_diagnostics
+from .evaluate import evaluate, macro, paired_interval, sampling_diagnostic, rollout_diagnostics
+from .config import validate_config
+from .artifacts import COMPLETION_FILE, EVALUATION_FILES, complete_evaluation
 
 
 def dump(path, obj):
@@ -38,6 +41,16 @@ def seed_all(seed, threads):
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
     # Reproducible seeds, not a bitwise cross-device determinism promise.
+
+
+def verify_source_identity(prov):
+    package = Path(__file__).parent
+    current = {p.name: sha256(p) for p in sorted(package.glob("*.py"))}
+    recorded = prov.get("code_hashes", {})
+    if current != recorded:
+        changed = sorted(set(current) | set(recorded))
+        changed = [name for name in changed if current.get(name) != recorded.get(name)]
+        raise ValueError(f"Source code differs from training provenance: {changed}")
 
 
 def get_device(cfg):
@@ -82,7 +95,11 @@ def provenance(root, cfg, data_dir, device):
         revision, dirty = None, "not a git checkout"
     return {"config": cfg, "prepared_sha256": sha256(Path(data_dir) / "prepared.npz"),
             "audit_sha256": sha256(Path(data_dir) / "audit.json"),
-            "code_hashes": code, "git_revision": revision, "git_status": dirty,
+            "code_hashes": code,
+            "code_bytes_base64": {p.name: base64.b64encode(p.read_bytes()).decode("ascii")
+                                  for p in sorted(Path(__file__).parent.glob("*.py"))},
+            "installed_packages": sorted(f"{d.metadata['Name']}=={d.version}" for d in importlib.metadata.distributions()),
+            "git_revision": revision, "git_status": dirty,
             "python": platform.python_version(), "platform": platform.platform(),
             "versions": {p: importlib.metadata.version(p) for p in ["torch", "transformers", "numpy", "pyarrow"]},
             "device": str(device), "cuda": torch.version.cuda,
@@ -225,8 +242,29 @@ def train_rl(policy, reference, rm, fit, cfg, device, beta, horizon, reward_inde
     return log
 
 
+def evaluation_decisions(h1_decision, h2_decision):
+    """Keep numeric rule decisions separate from the reused-test interpretation."""
+    return {"evaluation_status": "exploratory_reuse",
+            "descriptive_decisions": {"H1": h1_decision, "H2": h2_decision},
+            "verdicts": {"H1": f"exploratory reuse; {h1_decision}",
+                         "H2": f"exploratory reuse; {h2_decision}",
+                         "H3": "exploratory reuse; no confirmatory verdict"}}
+
+
+def select_candidate(candidates, base_summary, cfg):
+    """Select only from the declared eligible completion/horizon-1 population.
+
+    All-target metrics may be reported descriptively, but cannot affect this
+    confirmatory-style selection rule.
+    """
+    eligible = [c for c in candidates
+                if c["reward"] == "completion" and c["horizon"] == 1
+                and c["selection"]["eligible_ndcg"] >= cfg["rl"]["relevance_floor"] * base_summary["eligible_ndcg"]]
+    return max(eligible, key=lambda c: c["selection"]["eligible_sample_reward"]) if eligible else None
+
+
 def train(config, data_dir, run_dir):
-    cfg = config
+    cfg = validate_config(config)
     seed_all(cfg["seed"], cfg["train"]["threads"])
     device = get_device(cfg)
     run = Path(run_dir)
@@ -280,11 +318,9 @@ def train(config, data_dir, run_dir):
                 dump(run / "candidates.json", candidates)
                 del candidate
     # H2 is completion-only, horizon 1. Other grid members are exploratory.
-    confirmatory = [c for c in candidates if c["reward"] == "completion" and c["horizon"] == 1
-                    and c["selection"]["eligible_ndcg"] >= cfg["rl"]["relevance_floor"] * base_summary["eligible_ndcg"]]
-    chosen = max(confirmatory, key=lambda c: c["selection"]["sample_reward"]) if confirmatory else None
+    chosen = select_candidate(candidates, base_summary, cfg)
     dump(run / "selection.json", {"baseline": base_summary, "chosen": chosen,
-                                  "rule": "horizon1 completion; selection relevance floor then max sampled completion proxy",
+                                  "rule": "horizon1 completion; eligible-NDCG relevance floor then max eligible sampled completion proxy",
                                   "all_candidates_failed_floor": chosen is None})
     dump(run / "training.json", logs)
     chosen = json.loads((run / "selection.json").read_text()).get("chosen")
@@ -302,7 +338,7 @@ def train(config, data_dir, run_dir):
 
 
 @torch.no_grad()
-def reward_report(rm, auditor, fit, test, cfg, device):
+def reward_report(rm, auditor, fit, test, cfg, device, data=None):
     predictions = []
     audit_predictions = []
     for start in range(0, len(test["target"]), cfg["evaluation"]["batch_size"]):
@@ -315,35 +351,52 @@ def reward_report(rm, auditor, fit, test, cfg, device):
     apred = np.concatenate(audit_predictions)
     size = int(max(fit["target"].max(), test["target"].max())) + 1
     counts = np.bincount(fit["target"], minlength=size)
-    mean = float(fit["reward"].mean())
-    sums = np.bincount(fit["target"], weights=fit["reward"], minlength=size)
-    item_mean = np.divide(sums, counts, out=np.full(size, mean), where=counts > 0)
-    y = test["reward"]
-    baseline_error = np.abs(item_mean[test["target"]] - y)
-    error = np.abs(pred[:, 0] - y)
-    report = {"examples": len(y), "users": len(np.unique(test["uid"])),
-              "mae": macro(error, test["uid"])[0],
-              "rmse": macro((pred[:, 0] - y)**2, test["uid"])[0]**.5,
-              "auditor_mae": macro(np.abs(apred[:, 0] - y), test["uid"])[0],
-              "constant_mae": macro(np.abs(mean-y), test["uid"])[0],
-              "item_mean_mae": macro(baseline_error, test["uid"])[0],
-              "paired_mae": paired_interval(baseline_error, error, test["uid"], cfg["evaluation"]["bootstrap"]),
-              "calibration": [], "slices": {}}
-    for lo in np.arange(0, 1, .1):
-        mask = (pred[:, 0] >= lo) & (pred[:, 0] < lo + .1 if lo < .9 else pred[:, 0] <= 1)
-        if mask.any():
-            report["calibration"].append({"lower": float(lo), "n": int(mask.sum()),
-                                          "predicted": float(pred[mask, 0].mean()), "observed": float(y[mask].mean())})
-    for label, mask in [("organic", test["organic"] == 1), ("recommended", test["organic"] == 0)]:
-        if mask.any():
-            report["slices"][label] = {"n": int(mask.sum()), "mae": macro(error[mask], test["uid"][mask])[0]}
-    return report
+    heads = {}
+    for head, (name, label_key) in enumerate([("completion", "reward"), ("seconds", "seconds")]):
+        mean = float(fit[label_key].mean())
+        sums = np.bincount(fit["target"], weights=fit[label_key], minlength=size)
+        item_mean = np.divide(sums, counts, out=np.full(size, mean), where=counts > 0)
+        y = test[label_key]
+        baseline_error = np.abs(item_mean[test["target"]] - y)
+        error = np.abs(pred[:, head] - y)
+        report = {"examples": len(y), "users": len(np.unique(test["uid"])),
+                  "units": "bounded fraction" if head == 0 else "played-seconds proxy / seconds_cap",
+                  "mae": macro(error, test["uid"])[0],
+                  "rmse": macro((pred[:, head] - y)**2, test["uid"])[0]**.5,
+                  "auditor_mae": macro(np.abs(apred[:, head] - y), test["uid"])[0],
+                  "constant_mae": macro(np.abs(mean-y), test["uid"])[0],
+                  "item_mean_mae": macro(baseline_error, test["uid"])[0],
+                  "paired_mae": paired_interval(baseline_error, error, test["uid"], cfg["evaluation"]["bootstrap"],
+                                               cfg["evaluation"]["bootstrap_seed"]),
+                  "calibration": [], "slices": {}}
+        for lo in np.arange(0, 1, .1):
+            mask = (pred[:, head] >= lo) & (pred[:, head] < lo + .1 if lo < .9 else pred[:, head] <= 1)
+            if mask.any():
+                report["calibration"].append({"lower": float(lo), "n": int(mask.sum()),
+                                              "predicted": float(pred[mask, head].mean()), "observed": float(y[mask].mean())})
+        for label, mask in [("organic", test["organic"] == 1), ("recommended", test["organic"] == 0)]:
+            if mask.any():
+                report["slices"][label] = {"n": int(mask.sum()), "mae": macro(error[mask], test["uid"][mask])[0]}
+        if data is not None:
+            duration = data["durations"][test["target"] - 2]
+            for label, mask in [("duration_lt_180s", duration < 180),
+                                ("duration_180_to_300s", (duration >= 180) & (duration < 300)),
+                                ("duration_ge_300s", duration >= 300)]:
+                if mask.any():
+                    report["slices"][label] = {"n": int(mask.sum()),
+                                              "mae": macro(error[mask], test["uid"][mask])[0],
+                                              "item_mean_mae": macro(baseline_error[mask], test["uid"][mask])[0]}
+        if head == 1:
+            report["mae_seconds_proxy"] = report["mae"] * cfg["rl"]["seconds_cap"]
+        heads[name] = report
+    # Preserve the original completion fields for consumers of historical results.
+    return {**heads["completion"], "heads": heads}
 
 
 def final_evaluation(data_dir, run_dir):
     run = Path(run_dir)
-    if (run / "results.json").exists():
-        raise FileExistsError("Final results already exist; do not repeatedly inspect test")
+    if any((run / name).exists() for name in (*EVALUATION_FILES, COMPLETION_FILE)):
+        raise FileExistsError("Evaluation artifacts already exist; do not repeatedly inspect test")
     ready = json.loads((run / "READY_FOR_TEST.json").read_text())
     for name, digest in ready["checkpoint_hashes"].items():
         if sha256(run / name) != digest:
@@ -359,11 +412,13 @@ def final_evaluation(data_dir, run_dir):
     if selected_checkpoint != ready["selected_checkpoint"]:
         raise ValueError("Selected checkpoint does not match the immutable test manifest")
     prov = json.loads((run / "provenance.json").read_text())
-    cfg = prov["config"]
+    cfg = validate_config(prov["config"])
+    verify_source_identity(prov)
     if sha256(Path(data_dir) / "prepared.npz") != prov["prepared_sha256"]:
         raise ValueError("Prepared data changed")
     seed_all(cfg["seed"], cfg["train"]["threads"])
     device = get_device(cfg)
+    evaluation_provenance = provenance(Path(__file__).resolve().parents[1], cfg, data_dir, device)
     data = load_prepared(data_dir)
     args = model_args(data, cfg)
     rm = restore(run / "reward.pt", RewardModel(*args), device)
@@ -373,7 +428,7 @@ def final_evaluation(data_dir, run_dir):
     test = role(data, "test")
     evaluation_deadline = time.monotonic() + cfg["evaluation"]["max_minutes"] * 60
     results = {"interpretation": "restricted-catalog observed-next-listen and model-based diagnostics; not user impact; final evaluation is time-bounded by the configured job budget",
-               "reward_model": reward_report(rm, auditor, fit, role(data, "test", True), cfg, device), "policies": {}}
+               "reward_model": reward_report(rm, auditor, fit, role(data, "test", True), cfg, device, data), "policies": {}}
     arrays = {}
     base = None
     selected = json.loads((run / "selection.json").read_text())["chosen"]
@@ -395,8 +450,8 @@ def final_evaluation(data_dir, run_dir):
             eligible_mask = test["target"] >= 2
             results["policies"][name]["paired_vs_sft"] = {
                 **{metric: paired_interval(base[metric][eligible_mask], raw[metric][eligible_mask],
-                                            test["uid"][eligible_mask], cfg["evaluation"]["bootstrap"],
-                                            cfg["evaluation"]["bootstrap_seed"])
+                                           test["uid"][eligible_mask], cfg["evaluation"]["bootstrap"],
+                                           cfg["evaluation"]["bootstrap_seed"])
                    for metric in ["sample_reward", "sample_audit"]},
                 "eligible_ndcg": paired_interval(base["ndcg"][eligible_mask], raw["ndcg"][eligible_mask],
                                                    test["uid"][eligible_mask], cfg["evaluation"]["bootstrap"],
@@ -404,19 +459,28 @@ def final_evaluation(data_dir, run_dir):
                 "all_target_ndcg": paired_interval(base["ndcg"], raw["ndcg"], test["uid"],
                                                      cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"]),
                 "all_target_recall": paired_interval(base["recall"], raw["recall"], test["uid"],
-                                                       cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"])}
+                                                       cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"]),
+                "sampling_diagnostic": {metric: sampling_diagnostic(base[metric + "_draws"][eligible_mask],
+                                                                       raw[metric + "_draws"][eligible_mask],
+                                                                       test["uid"][eligible_mask])
+                                        for metric in ["sample_reward", "sample_audit"]}}
     h1 = results["reward_model"]["paired_mae"]
-    h1_supported = h1["relative_ci95"] is not None and h1["relative_ci95"][1] <= -.02 and h1["adequate_users"]
-    results["verdicts"] = {"H1": "supported" if h1_supported else "not supported" if h1["adequate_users"] else "inconclusive",
-                           "H2": "not supported", "H3": "exploratory; no confirmatory verdict"}
+    h1_supported = (h1["relative_difference"] is not None and h1["relative_difference"] <= -.02
+                    and h1["relative_ci95"] is not None and h1["relative_ci95"][1] < 0
+                    and h1["adequate_users"])
+    h1_decision = "supported" if h1_supported else "not supported" if h1["adequate_users"] else "inconclusive"
+    h2_decision = "not supported"
     if selected:
         comparison = results["policies"][selected["name"]]["paired_vs_sft"]
         gain, relevance = comparison["sample_reward"], comparison["eligible_ndcg"]
         if gain["adequate_users"] and relevance["relative_ci95"] is not None:
             ok = gain["relative_ci95"] is not None and gain["relative_ci95"][0] >= .05 and relevance["relative_ci95"][0] > -.02
-            results["verdicts"]["H2"] = "supported (proxy-only)" if ok else "not supported"
+            h2_decision = "supported (proxy-only)" if ok else "not supported"
         else:
-            results["verdicts"]["H2"] = "inconclusive"
+            h2_decision = "inconclusive"
+    # This test interval is reused for the amended protocol: numbers remain
+    # descriptive, but cannot be emitted as unqualified confirmatory verdicts.
+    results.update(evaluation_decisions(h1_decision, h2_decision))
     results["selected"] = selected["name"] if selected else None
     results["limitations"] = ["No exposure probabilities, user simulator validation or causal identification",
         "Independent auditor shares observational bias and is only a disagreement diagnostic",
@@ -424,6 +488,5 @@ def final_evaluation(data_dir, run_dir):
         "Uniform event subsampling yields a sampled-context user-macro estimand; inspect audit for coverage",
         "The pilot uses a declared 70/10/10/10 fit/calibration/selection/test temporal split; this supersedes any 80/10/10 prose in earlier planning.",
         "All grid test results except preselected H2 are exploratory; no post-test selection permitted"]
-    np.savez_compressed(run / "per_example.npz", **arrays)
-    dump(run / "results.json", results)
+    complete_evaluation(run, results, arrays, evaluation_provenance)
     return results

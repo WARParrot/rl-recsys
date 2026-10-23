@@ -1,6 +1,6 @@
 # Separate RL recommendation experiment — declared before training
 
-Status: implementation/pilot preparation; no quality claims. Decision owner: user.
+Historical planning document; not evidence of independently timestamped preregistration. The pilot test has since been inspected. Current post-audit changes and acceptance checks are in [RESEARCH_UPGRADE.md](RESEARCH_UPGRADE.md); existing pilot numbers are descriptive. Decision owner: user.
 Budget: one RTX 5060 Ti 16GB, 48h after GPU access. Current BB machine has no NVIDIA device; GPU execution blocked.
 
 ## Scope and estimands

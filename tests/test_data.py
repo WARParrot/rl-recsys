@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from rl_recsys.data import prepare_arrays
 
 
@@ -24,12 +25,59 @@ def test_preparation_is_deterministic_and_strict():
         if isinstance(a[key], np.ndarray): np.testing.assert_array_equal(a[key], b[key])
     assert audit == audit2
     assert audit["ambiguous_rows_excluded"] == 0
+    assert audit["ambiguous_timestamp_groups"] == 0
+    assert audit["ambiguous_users"] == 0
     assert np.all(a["fit_context"][:, -1] != 0)
 
 
-def test_same_timestamp_rows_excluded():
+def test_same_timestamp_rows_excluded_and_audited():
     x = raw()
     x["timestamp"][1] = x["timestamp"][0]
     a, audit = prepare_arrays(x, cfg())
     assert audit["ambiguous_rows_excluded"] == 2
-    assert len(a["fit_target"]) >= 0
+    assert audit["ambiguous_timestamp_groups"] == 1
+    assert audit["ambiguous_users"] == 1
+    assert 0 not in a["vocab"] and 1 not in a["vocab"]
+
+
+def test_exact_dedup_preserves_large_integer_ids():
+    x = raw()
+    x["item_id"][:2] = [2**53, 2**53 + 1]
+    x["timestamp"][1] = x["timestamp"][0]
+    duplicate = {name: values[:1].copy() for name, values in x.items()}
+    x = {name: np.concatenate([values, duplicate[name]]) for name, values in x.items()}
+
+    _, audit = prepare_arrays(x, cfg())
+    assert audit["exact_duplicates_removed"] == 1
+    assert audit["ambiguous_rows_excluded"] == 2
+    assert audit["ambiguous_timestamp_groups"] == 1
+
+    # Large user IDs with otherwise identical rows must also remain distinct.
+    x = raw()
+    x["uid"] = np.repeat([2**53, 2**53 + 1, 3, 4], 5)
+    x["item_id"][5:10] = x["item_id"][:5]
+    prepared, audit = prepare_arrays(x, cfg())
+    assert audit["exact_duplicates_removed"] == 0
+    assert {2**53, 2**53 + 1}.issubset(set(prepared["fit_uid"].tolist()))
+
+
+@pytest.mark.parametrize("column", ["uid", "item_id", "timestamp"])
+@pytest.mark.parametrize("invalid", [1.0, 1.5, -1, 2**63])
+def test_invalid_integer_column_is_rejected(column, invalid):
+    x = raw()
+    dtype = float if isinstance(invalid, float) else np.uint64 if invalid == 2**63 else np.int64
+    x[column] = x[column].astype(dtype)
+    x[column][0] = invalid
+    with pytest.raises(ValueError, match="integer"):
+        prepare_arrays(x, cfg())
+
+
+def test_multiple_tie_groups_count_users_once_after_dedup():
+    x = raw()
+    x["timestamp"][[1, 3, 6]] = x["timestamp"][[0, 2, 5]]
+    x = {name: np.concatenate([values, values[:1]]) for name, values in x.items()}
+    _, audit = prepare_arrays(x, cfg())
+    assert audit["exact_duplicates_removed"] == 1
+    assert audit["ambiguous_rows_excluded"] == 6
+    assert audit["ambiguous_timestamp_groups"] == 3
+    assert audit["ambiguous_users"] == 2

@@ -36,5 +36,5 @@
     "rerank_weight": 1.0,
     "relevance_floor": 0.98
   },
-  "evaluation": {"k": 10, "batch_size": 512, "bootstrap": 2000, "bootstrap_seed": 2026, "rollout_samples": 1, "max_minutes": 120}
+  "evaluation": {"k": 10, "batch_size": 512, "bootstrap": 2000, "bootstrap_seed": 2026, "action_samples": 16, "rollout_samples": 4, "max_minutes": 120}
 }

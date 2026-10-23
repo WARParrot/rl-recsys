@@ -11,6 +11,7 @@ import pyarrow.parquet as pq
 
 
 COLUMNS = ["uid", "item_id", "timestamp", "is_organic", "played_ratio_pct", "track_length_seconds"]
+_INTEGER_COLUMNS = ("uid", "item_id", "timestamp")
 
 
 def sha256(path):
@@ -80,12 +81,24 @@ def prepare_arrays(raw, cfg):
         raise ValueError("Empty or inconsistent columns")
     if any(not np.isfinite(a).all() for a in arrays.values()):
         raise ValueError("Missing/nonfinite input: audit before proceeding")
+    # Reject float IDs even when integral: precision may already have been
+    # lost before preparation. Outputs use nonnegative signed int64 IDs/times.
+    for name in _INTEGER_COLUMNS:
+        values = arrays[name]
+        if values.dtype.kind not in "iu":
+            raise ValueError(f"Expected integer dtype for {name}")
+        if int(values.min()) < 0 or int(values.max()) > np.iinfo(np.int64).max:
+            raise ValueError(f"Out-of-range integer values in {name}")
+        arrays[name] = values.astype(np.int64, copy=False)
     if np.any(arrays["played_ratio_pct"] < 0) or np.any(arrays["track_length_seconds"] <= 0):
         raise ValueError("Invalid playback values; do not silently clean")
     if not np.isin(arrays["is_organic"], [0, 1]).all():
         raise ValueError("Invalid organic flag")
-    matrix = np.column_stack([arrays[c] for c in COLUMNS])
-    _, unique_idx = np.unique(matrix, axis=0, return_index=True)
+    row_dtype = np.dtype([(name, arrays[name].dtype) for name in COLUMNS])
+    rows = np.empty(n, dtype=row_dtype)
+    for name in COLUMNS:
+        rows[name] = arrays[name]
+    _, unique_idx = np.unique(rows, return_index=True)
     unique_idx.sort()
     arrays = {c: a[unique_idx] for c, a in arrays.items()}
     order = np.lexsort((arrays["timestamp"], arrays["uid"]))
@@ -94,6 +107,10 @@ def prepare_arrays(raw, cfg):
     previous = np.r_[False, (uid[1:] == uid[:-1]) & (ts[1:] == ts[:-1])]
     following = np.r_[(uid[1:] == uid[:-1]) & (ts[1:] == ts[:-1]), False]
     singleton = ~(previous | following)
+    ambiguous = ~singleton
+    ambiguous_group_starts = (~previous) & following
+    ambiguous_group_count = int(ambiguous_group_starts.sum())
+    ambiguous_user_count = int(np.unique(uid[ambiguous]).size)
     # Cutoffs computed on all sampled events, not on favorable feedback/catalog.
     cutoffs = np.quantile(ts, dc["quantiles"], method="nearest").astype(np.int64)
     if not np.all(np.diff(cutoffs) > 0):
@@ -171,7 +188,9 @@ def prepare_arrays(raw, cfg):
             result[f"{name}_{k}"] = v
     result.update(vocab=vocab, popularity=pop, durations=duration, cutoffs=cutoffs)
     audit = {"input_rows": n, "exact_duplicates_removed": n - len(uid),
-             "ambiguous_rows_excluded": int((~singleton).sum()),
+             "ambiguous_rows_excluded": int(ambiguous.sum()),
+             "ambiguous_timestamp_groups": ambiguous_group_count,
+             "ambiguous_users": ambiguous_user_count,
              "pct_above_100": int((arrays["played_ratio_pct"] > 100).sum()),
              "roles": role_stats, "cutoffs": cutoffs.tolist(), "catalog": len(vocab),
              "history_policy": "strictly earlier singleton timestamp bins; repeats allowed; rolling observed history",
@@ -180,6 +199,8 @@ def prepare_arrays(raw, cfg):
 
 
 def prepare(path, config, output):
+    from .config import validate_config
+    config = validate_config(config)
     if sha256(path) != config["data"]["sha256"]:
         raise ValueError("Dataset SHA256 differs from protocol")
     raw, ids = read_sample(path, config["data"]["users"], config["seed"])

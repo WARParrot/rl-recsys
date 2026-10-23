@@ -1,6 +1,8 @@
 # Yambda-50M: GPT-2 item-ID + model-based RL pilot
 
-**Статус:** завершён один restricted pilot; это не доказательство causal/user impact.
+**Статус:** исторический restricted pilot; это не доказательство causal/user impact. Текущий код обновлён после аудита: [protocol amendment](RESEARCH_UPGRADE.md). Нового GPU-эксперимента по обновлённому протоколу пока нет; таблицы ниже не пересчитаны.
+
+**Provenance qualification:** metadata hashes agree internally, but the supplied run's source-code hashes could not be reconstructed from the recorded Git revision/current checkout, including line-ending checks. Exact source-byte identity remains unverified. Do not treat the revision label alone as proof of the executed source.
 
 ## 1. Вопрос и scope
 
@@ -37,6 +39,8 @@
 This report supersedes the earlier pilot numbers with the rerun on `7892d18`. All five metadata hashes in `READY_FOR_TEST.json` match the supplied selection, candidates, training, provenance and audit files. Its selected checkpoint agrees with selection; hashes for all 15 checkpoints are recorded, but the checkpoint bytes were not supplied for independent verification. This establishes internal artifact consistency, not an independently timestamped preregistration.
 
 The Windows evaluation stderr still contains a PyTorch redirect warning rendered as a PowerShell NativeCommandError. It is now separate from the results JSON; no Python traceback was found. A process exit-status manifest was not supplied, so a clean wrapper exit is not independently established. The provenance lists only untracked logs/egg-info, not modifications to tracked source files.
+
+The historical selector maximized all-context sampled reward while the paired test reward comparison used eligible-target contexts. This population mismatch does not change the negative practical conclusion, but prevents treating selection and test reward as exactly the same estimand. The revised code aligns both to eligible contexts. The historical seconds head was optimized but not held-out validated separately; its duration-shift interpretation is exploratory.
 
 All-target policy metrics average over 10,000 contexts / 837 users. Eligible relevance averages over 5,083 targets / 733 users. Selection uses eligible NDCG; paired sampled-reward comparisons also use eligible contexts and must not be confused with the all-target sampled-reward column below.
 
@@ -112,9 +116,9 @@ The point estimate crosses the 2% materiality threshold, but the uncertainty int
 
 The selected RL policy increased the sampled proxy by about 0.046% on eligible contexts, not 5%. Reranking achieved a comparable proxy/relevance trade-off without policy training. The result does not support rollout or product claims.
 
-### H3 — **Exploratory evidence only**
+### H3 — **Inconclusive for increasing disagreement; exploratory score divergence**
 
-Five-step synthetic contexts produce higher reward-model scores but not higher auditor scores. This is consistent with model exploitation/context shift, but the auditor shares observational exposure bias and cannot establish causal reward hacking.
+Five-step synthetic contexts produce higher reward-model scores but not higher auditor scores, while mean absolute disagreement decreases. This does not support increasing disagreement. Model exploitation/context shift remains a hypothesis, not a directly measured mechanism; the auditor shares observational exposure bias and cannot establish causal reward hacking.
 
 ## 7. Limitations and validity threats
 
