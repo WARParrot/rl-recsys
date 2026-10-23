@@ -99,7 +99,7 @@ if errorlevel 1 (
 )
 
 echo Running final evaluation...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& { & '%PY%' -m rl_recsys.cli evaluate --data data/prepared --run runs\pilot-seed42 2>&1 | Tee-Object -FilePath logs\evaluation.log | Out-File -FilePath runs\pilot-seed42\final-evaluation.json -Encoding utf8; exit $LASTEXITCODE }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { & '%PY%' -m rl_recsys.cli evaluate --data data/prepared --run runs\pilot-seed42 1> runs\pilot-seed42\final-evaluation.json 2> logs\evaluation.log; $code=$LASTEXITCODE; if ($code -ne 0) { Get-Content logs\evaluation.log }; exit $code }"
 if errorlevel 1 (
   type logs\evaluation.log
   exit /b 1

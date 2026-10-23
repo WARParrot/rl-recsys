@@ -21,7 +21,7 @@ Primary optimization estimand: expected frozen reward-model bounded completion u
 
 ## Experiment design (provisional pending independent audit)
 
-Train/selection/test global timestamp quantiles 80/10/10 computed in fixed sampled-user population before catalog filtering; training internally partitioned by time into SFT/RM train and RM early-stopping/audit intervals. No checkpoint selected on test. Histories can incorporate earlier logged validation/test observations in rolling teacher-forced evaluation, without weight updates. Clearly label this protocol.
+The frozen pilot uses global timestamp quantiles 70/80/90, yielding fit/calibration/selection/test roles of 70/10/10/10 in the fixed sampled-user population before catalog filtering. Calibration is used for early stopping; selection is used for RL candidate choice; test remains untouched until final evaluation. Any future 80/10/10 design is a separate protocol, not this pilot. No checkpoint selected on test. Histories can incorporate earlier logged validation/test observations in rolling teacher-forced evaluation, without weight updates. Clearly label this protocol.
 Pilot: deterministic hash sample of 1000 users, train-only top-20000 items; this is a restricted-population/catalog feasibility experiment, NOT official Yambda benchmark. Full-catalog expansion only after throughput/memory measurement. Never choose users/items based on future activity. Retain excluded target counts. Context length 64; GPT2 4 layers, 128 hidden, 4 heads; start batch 64 with bounded max optimizer steps. Main configuration must be frozen before examining final test metrics.
 
 Suggested hypotheses, not results:

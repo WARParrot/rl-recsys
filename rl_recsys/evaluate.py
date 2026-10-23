@@ -86,7 +86,11 @@ def evaluate(policy, rm, auditor, subset, data, cfg, device, mode="policy", dead
     out["uid"] = subset["uid"]
     summary = {key: macro(out[key], out["uid"])[0] for key in out if key not in ["uid", "recommendations"]}
     eligible = subset["target"] >= 2
-    summary.update(examples=len(eligible), users=len(np.unique(subset["uid"])),
+    eligible_users = np.unique(subset["uid"][eligible])
+    summary.update(all_target_examples=len(subset["target"]),
+                   eligible_target_examples=int(eligible.sum()),
+                   all_target_users=len(np.unique(subset["uid"])),
+                   eligible_target_users=len(eligible_users),
                    target_coverage=float(eligible.mean()),
                    eligible_ndcg=macro(out["ndcg"][eligible], subset["uid"][eligible])[0] if eligible.any() else None,
                    catalog_coverage=len(np.unique(out["recommendations"])) / len(data["vocab"]))
@@ -100,20 +104,22 @@ def rollout_diagnostics(policy, rm, auditor, subset, cfg, device, horizon=5, dea
     """Synthetic context only: not measured user transitions/session value."""
     result = []
     bs = cfg["evaluation"]["batch_size"]
+    samples = max(1, int(cfg["evaluation"].get("rollout_samples", 1)))
     generator = torch.Generator(device=device).manual_seed(cfg["seed"] + 20000)
     buffers = [[] for _ in range(horizon)]
-    for start in range(0, len(subset["target"]), bs):
-        if deadline is not None and time.monotonic() >= deadline:
-            raise TimeoutError("Deadline reached during rollout diagnostics")
-        context = torch.as_tensor(subset["context"][start:start + bs], device=device)
-        for t in range(horizon):
-            action = torch.multinomial((policy(context) / cfg["rl"]["sampling_temperature"]).softmax(-1), 1,
-                                       generator=generator).squeeze(1)
-            r = rm(context, action + 2)[:, 0]
-            a = auditor(context, action + 2)[:, 0]
-            repeat = (context == (action + 2)[:, None]).any(1).float()
-            buffers[t].append(torch.stack([r, a, (r-a).abs(), repeat], 1).cpu().numpy())
-            context = append_action(context, action)
+    for sample in range(samples):
+        for start in range(0, len(subset["target"]), bs):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("Deadline reached during rollout diagnostics")
+            context = torch.as_tensor(subset["context"][start:start + bs], device=device)
+            for t in range(horizon):
+                action = torch.multinomial((policy(context) / cfg["rl"]["sampling_temperature"]).softmax(-1), 1,
+                                           generator=generator).squeeze(1)
+                r = rm(context, action + 2)[:, 0]
+                a = auditor(context, action + 2)[:, 0]
+                repeat = (context == (action + 2)[:, None]).any(1).float()
+                buffers[t].append(torch.stack([r, a, (r-a).abs(), repeat], 1).cpu().numpy())
+                context = append_action(context, action)
     for t, values in enumerate(buffers):
         values = np.concatenate(values)
         result.append({"step": t + 1, **{key: macro(values[:, i], subset["uid"])[0]

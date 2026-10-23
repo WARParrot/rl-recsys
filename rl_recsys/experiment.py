@@ -287,11 +287,18 @@ def train(config, data_dir, run_dir):
                                   "rule": "horizon1 completion; selection relevance floor then max sampled completion proxy",
                                   "all_candidates_failed_floor": chosen is None})
     dump(run / "training.json", logs)
-    dump(run / "READY_FOR_TEST.json", {"status": "training complete; test unexamined",
-                                        "checkpoint_hashes": {p.name: sha256(p) for p in sorted(run.glob("*.pt"))},
-                                        "selection_sha256": sha256(run / "selection.json"),
-                                        "candidates_sha256": sha256(run / "candidates.json"),
-                                        "training_sha256": sha256(run / "training.json")})
+    chosen = json.loads((run / "selection.json").read_text()).get("chosen")
+    manifest = {"status": "training complete; test unexamined",
+                "checkpoint_hashes": {p.name: sha256(p) for p in sorted(run.glob("*.pt"))},
+                "selection_sha256": sha256(run / "selection.json"),
+                "candidates_sha256": sha256(run / "candidates.json"),
+                "training_sha256": sha256(run / "training.json"),
+                "provenance_sha256": sha256(run / "provenance.json"),
+                "prepared_audit_sha256": sha256(Path(data_dir) / "audit.json"),
+                "selected_checkpoint": (f'{chosen["name"]}.pt' if chosen else None)}
+    if chosen and manifest["selected_checkpoint"] not in manifest["checkpoint_hashes"]:
+        raise RuntimeError("Selected checkpoint is missing from the training manifest")
+    dump(run / "READY_FOR_TEST.json", manifest)
 
 
 @torch.no_grad()
@@ -341,9 +348,16 @@ def final_evaluation(data_dir, run_dir):
     for name, digest in ready["checkpoint_hashes"].items():
         if sha256(run / name) != digest:
             raise ValueError("Checkpoint changed after selection")
-    for name in ["selection.json", "candidates.json", "training.json"]:
-        if sha256(run / name) != ready[name.replace(".json", "_sha256")]:
+    for name in ["selection.json", "candidates.json", "training.json", "provenance.json"]:
+        key = name.replace(".json", "_sha256")
+        if sha256(run / name) != ready[key]:
             raise ValueError(f"{name} changed after selection")
+    if sha256(Path(data_dir) / "audit.json") != ready["prepared_audit_sha256"]:
+        raise ValueError("Prepared audit changed after selection")
+    selected_manifest = json.loads((run / "selection.json").read_text()).get("chosen")
+    selected_checkpoint = f'{selected_manifest["name"]}.pt' if selected_manifest else None
+    if selected_checkpoint != ready["selected_checkpoint"]:
+        raise ValueError("Selected checkpoint does not match the immutable test manifest")
     prov = json.loads((run / "provenance.json").read_text())
     cfg = prov["config"]
     if sha256(Path(data_dir) / "prepared.npz") != prov["prepared_sha256"]:
@@ -357,7 +371,8 @@ def final_evaluation(data_dir, run_dir):
     policy = restore(run / "sft.pt", Policy(*args), device)
     fit = role(data, "fit", True)
     test = role(data, "test")
-    results = {"interpretation": "restricted-catalog observed-next-listen and model-based diagnostics; not user impact; final evaluation is time-bounded by the configured job budget", 
+    evaluation_deadline = time.monotonic() + cfg["evaluation"]["max_minutes"] * 60
+    results = {"interpretation": "restricted-catalog observed-next-listen and model-based diagnostics; not user impact; final evaluation is time-bounded by the configured job budget",
                "reward_model": reward_report(rm, auditor, fit, role(data, "test", True), cfg, device), "policies": {}}
     arrays = {}
     base = None
@@ -367,27 +382,36 @@ def final_evaluation(data_dir, run_dir):
     specs += [(c["name"], "policy", c["name"]) for c in candidates]
     for name, mode, source in specs:
         restore(run / f"{source}.pt", policy, device)
-        summary, raw = evaluate(policy, rm, auditor, test, data, cfg, device, mode, deadline=None)
+        summary, raw = evaluate(policy, rm, auditor, test, data, cfg, device, mode, deadline=evaluation_deadline)
         results["policies"][name] = summary
         for key, value in raw.items():
             arrays[f"{name}_{key}"] = value
         if name == "sft":
             base = raw
         if name == "sft" or name.startswith("rl_"):
-            results["policies"][name]["hypothetical_rollout"] = rollout_diagnostics(policy, rm, auditor, test, cfg, device)
+            results["policies"][name]["hypothetical_rollout"] = rollout_diagnostics(policy, rm, auditor, test, cfg, device,
+                                                                                       deadline=evaluation_deadline)
         if name.startswith("rl_") or name == "rerank":
+            eligible_mask = test["target"] >= 2
             results["policies"][name]["paired_vs_sft"] = {
-                metric: paired_interval(base[metric][test["target"] >= 2], raw[metric][test["target"] >= 2],
-                                         test["uid"][test["target"] >= 2], cfg["evaluation"]["bootstrap"],
-                                         cfg["evaluation"]["bootstrap_seed"])
-                for metric in ["ndcg", "recall", "sample_reward", "sample_audit"]}
+                **{metric: paired_interval(base[metric][eligible_mask], raw[metric][eligible_mask],
+                                            test["uid"][eligible_mask], cfg["evaluation"]["bootstrap"],
+                                            cfg["evaluation"]["bootstrap_seed"])
+                   for metric in ["sample_reward", "sample_audit"]},
+                "eligible_ndcg": paired_interval(base["ndcg"][eligible_mask], raw["ndcg"][eligible_mask],
+                                                   test["uid"][eligible_mask], cfg["evaluation"]["bootstrap"],
+                                                   cfg["evaluation"]["bootstrap_seed"]),
+                "all_target_ndcg": paired_interval(base["ndcg"], raw["ndcg"], test["uid"],
+                                                     cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"]),
+                "all_target_recall": paired_interval(base["recall"], raw["recall"], test["uid"],
+                                                       cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"])}
     h1 = results["reward_model"]["paired_mae"]
     h1_supported = h1["relative_ci95"] is not None and h1["relative_ci95"][1] <= -.02 and h1["adequate_users"]
     results["verdicts"] = {"H1": "supported" if h1_supported else "not supported" if h1["adequate_users"] else "inconclusive",
                            "H2": "not supported", "H3": "exploratory; no confirmatory verdict"}
     if selected:
         comparison = results["policies"][selected["name"]]["paired_vs_sft"]
-        gain, relevance = comparison["sample_reward"], comparison["ndcg"]
+        gain, relevance = comparison["sample_reward"], comparison["eligible_ndcg"]
         if gain["adequate_users"] and relevance["relative_ci95"] is not None:
             ok = gain["relative_ci95"] is not None and gain["relative_ci95"][0] >= .05 and relevance["relative_ci95"][0] > -.02
             results["verdicts"]["H2"] = "supported (proxy-only)" if ok else "not supported"
