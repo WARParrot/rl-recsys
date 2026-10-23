@@ -3,8 +3,9 @@ import pytest
 import torch
 
 from rl_recsys.evaluate import (evaluate, macro, paired_interval, sampling_diagnostic,
-                                rollout_diagnostics, exact_one_step_expected_reward)
-from rl_recsys.experiment import reward_report, verify_source_identity
+                                rollout_diagnostics, exact_one_step_expected_reward,
+                                action_support_diagnostic)
+from rl_recsys.experiment import reward_report, verify_source_identity, reward_gate
 
 
 class Policy(torch.nn.Module):
@@ -105,11 +106,19 @@ def test_exact_one_step_expected_reward_categorical():
 
 def test_replicated_reward_and_eligible_population():
     subset, data, cfg = fixture()
+    data['fit_target'] = np.array([2, 2, 4])
     summary, raw = evaluate(Policy(), Reward(), Reward(), subset, data, cfg, torch.device('cpu'))
     assert raw['sample_reward_draws'].shape == (3, 8)
+    assert summary['action_support']['unsupported_action_rate'] == 0
+    assert summary['action_support']['unsupported_reward_score_mean'] is None
+    assert summary['sample_action_support']['unsupported_action_rate'] == pytest.approx(
+        np.mean(raw['sample_actions'] == 3))
+    assert raw['top_reward_actions'].shape == raw['recommendations'].shape
     np.testing.assert_allclose(raw['sample_reward'], raw['sample_reward_draws'].mean(1))
     mask = subset['target'] >= 2
     assert summary['eligible_sample_reward'] == macro(raw['sample_reward'][mask], subset['uid'][mask])[0]
+    np.testing.assert_allclose(raw['exact_one_step_expected_reward'], [.6, .6, .6])
+    assert summary['eligible_exact_one_step_expected_reward'] == pytest.approx(.6)
     assert summary['eligible_target_examples'] == 2
     assert summary['ndcg'] == .25
     assert summary['eligible_ndcg'] == .5
@@ -144,6 +153,35 @@ def test_both_reward_heads_have_independent_validation():
     assert len(result['heads']['seconds']['calibration']) > 0
     assert set(result['heads']['seconds']['slices']) == {
         'organic', 'recommended', 'duration_lt_180s', 'duration_180_to_300s', 'duration_ge_300s'}
+
+
+def test_reward_gate_disables_heads_that_do_not_beat_item_mean():
+    cfg = {"rl": {"rewards": ["completion", "seconds"]},
+           "reward_audit": {"min_relative_improvement": 0.02}}
+    audit = {"heads": {
+        "completion": {"paired_mae": {"relative_difference": -0.03}, "mae": .8, "constant_mae": .9},
+        "seconds": {"paired_mae": {"relative_difference": 0.01}, "mae": 1., "constant_mae": .9},
+    }}
+    gate = reward_gate(audit, cfg)
+    assert gate["enabled_rewards"] == ["completion"]
+    assert gate["heads"]["seconds"]["enabled"] is False
+    assert reward_gate({"heads": {"completion": {"paired_mae": {"relative_difference": None}, "mae": 1, "constant_mae": 1}}}, cfg)["status"] == "failed"
+
+
+def test_sampling_diagnostic_preserves_draw_pairing():
+    a = np.repeat(np.array([.2, .4, .8])[:, None], 4, axis=1)
+    b = a + .1
+    assert sampling_diagnostic(a, b, np.array([1, 1, 2]))['difference'] == pytest.approx(.1)
+
+
+def test_action_support_reports_ood_score_shift():
+    result = action_support_diagnostic(
+        np.array([[2, 3], [4, 2]]), np.array([[.2, .8], [.9, .1]]),
+        np.array([2, 4]), np.array([10, 10]))
+    assert result["unsupported_action_rate"] == pytest.approx(.25)
+    assert result["supported_reward_score_mean"] == pytest.approx(.4)
+    assert result["unsupported_reward_score_mean"] == pytest.approx(.8)
+    assert result["user_macro_unsupported_rate"] == pytest.approx(.25)
 
 
 def test_sampling_diagnostic_preserves_draw_pairing():

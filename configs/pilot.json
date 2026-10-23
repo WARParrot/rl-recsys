@@ -7,7 +7,9 @@
     "users": 1000,
     "catalog_size": 20000,
     "context_length": 64,
+    "cutoffs": [19853890, 22072765, 24049600],
     "quantiles": [0.7, 0.8, 0.9],
+    "allow_derived_cutoffs": false,
     "max_train": 250000,
     "max_valid": 10000,
     "max_test": 10000
@@ -36,5 +38,6 @@
     "rerank_weight": 1.0,
     "relevance_floor": 0.98
   },
+  "reward_audit": {"min_relative_improvement": 0.02},
   "evaluation": {"k": 10, "batch_size": 512, "bootstrap": 2000, "bootstrap_seed": 2026, "action_samples": 16, "rollout_samples": 4, "max_minutes": 120}
 }

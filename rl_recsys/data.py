@@ -75,6 +75,8 @@ def prepare_arrays(raw, cfg):
     Exact duplicate rows are removed first; counts are reported.
     """
     dc = cfg["data"]
+    from .config import validate_temporal_config
+    validate_temporal_config(dc)
     arrays = {k: np.asarray(raw[k]) for k in COLUMNS}
     n = len(arrays["uid"])
     if not n or any(len(a) != n for a in arrays.values()):
@@ -111,10 +113,19 @@ def prepare_arrays(raw, cfg):
     ambiguous_group_starts = (~previous) & following
     ambiguous_group_count = int(ambiguous_group_starts.sum())
     ambiguous_user_count = int(np.unique(uid[ambiguous]).size)
-    # Cutoffs computed on all sampled events, not on favorable feedback/catalog.
-    cutoffs = np.quantile(ts, dc["quantiles"], method="nearest").astype(np.int64)
-    if not np.all(np.diff(cutoffs) > 0):
-        raise ValueError("Insufficient timestamp variation")
+    # Calendar cutoffs are frozen in the protocol and must not be estimated from
+    # the complete (future-inclusive) sample. Quantiles are retained only for
+    # direct callers/legacy configs and are explicitly marked in the audit.
+    if dc.get("cutoffs") is not None:
+        cutoffs = np.asarray(dc["cutoffs"], dtype=np.int64)
+        cutoff_source = "frozen_calendar_config"
+    else:
+        if not dc.get("allow_derived_cutoffs", False):
+            raise ValueError("data.cutoffs is required; legacy quantiles need allow_derived_cutoffs=true")
+        cutoffs = np.quantile(ts, dc["quantiles"], method="nearest").astype(np.int64)
+        cutoff_source = "legacy_sample_quantiles_future_inclusive"
+    if len(cutoffs) != 3 or not np.all(np.diff(cutoffs) > 0):
+        raise ValueError("Cutoffs must contain three strictly increasing timestamps")
     train_mask = (ts < cutoffs[0]) & singleton
     items, counts = np.unique(arrays["item_id"][train_mask], return_counts=True)
     if not len(items):
@@ -192,7 +203,11 @@ def prepare_arrays(raw, cfg):
              "ambiguous_timestamp_groups": ambiguous_group_count,
              "ambiguous_users": ambiguous_user_count,
              "pct_above_100": int((arrays["played_ratio_pct"] > 100).sum()),
-             "roles": role_stats, "cutoffs": cutoffs.tolist(), "catalog": len(vocab),
+             "roles": role_stats, "cutoffs": cutoffs.tolist(), "cutoff_source": cutoff_source,
+             "audit_metadata": {"cutoff_source": cutoff_source,
+                                "future_information_used_for_cutoff_formation": cutoff_source != "frozen_calendar_config",
+                                "timestamp_unit": "dataset timestamp integer; boundaries are inclusive on lower, exclusive on upper role intervals"},
+             "catalog": len(vocab),
              "history_policy": "strictly earlier singleton timestamp bins; repeats allowed; rolling observed history",
              "duration_policy": "train-only per-item median duration; seconds reward is proxy, not wall-clock"}
     return result, audit

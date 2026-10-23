@@ -22,6 +22,31 @@ def _positive(cfg: Mapping, path: str, errors: list[str]) -> None:
         errors.append(f"{path} must be positive")
 
 
+def validate_temporal_config(data: Mapping) -> None:
+    """Shared by full config validation and direct array preparation."""
+    if not isinstance(data, Mapping):
+        raise ConfigValidationError("data must be an object")
+    legacy = data.get("allow_derived_cutoffs", False)
+    if not isinstance(legacy, bool):
+        raise ConfigValidationError("data.allow_derived_cutoffs must be boolean")
+    cutoffs = data.get("cutoffs")
+    if cutoffs is not None:
+        if (not isinstance(cutoffs, (list, tuple)) or len(cutoffs) != 3
+                or any(isinstance(x, bool) or not isinstance(x, int)
+                       or not 0 <= x <= 2**63 - 1 for x in cutoffs)
+                or any(a >= b for a, b in zip(cutoffs, cutoffs[1:]))):
+            raise ConfigValidationError("data.cutoffs must contain three strictly increasing nonnegative int64 timestamps")
+    elif not legacy:
+        raise ConfigValidationError("data.cutoffs is required; allow_derived_cutoffs is only for legacy exploratory runs")
+    quantiles = data.get("quantiles")
+    if quantiles is not None or cutoffs is None:
+        if (not isinstance(quantiles, (list, tuple)) or len(quantiles) != 3
+                or any(isinstance(q, bool) or not isinstance(q, (int, float))
+                       or not math.isfinite(q) or not 0 < q < 1 for q in quantiles)
+                or any(a >= b for a, b in zip(quantiles, quantiles[1:]))):
+            raise ConfigValidationError("data.quantiles must contain three strictly increasing numbers between 0 and 1")
+
+
 def validate_config(config: Mapping) -> Mapping:
     """Validate invariants that otherwise fail only after expensive work starts."""
     errors: list[str] = []
@@ -32,16 +57,17 @@ def validate_config(config: Mapping) -> Mapping:
                  "train.batch_size", "evaluation.batch_size", "data.catalog_size", "evaluation.k"):
         _positive(config, path, errors)
     _positive(config, "rl.seconds_cap", errors)
+    try:
+        threshold = config.get("reward_audit", {}).get("min_relative_improvement", 0.0)
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not math.isfinite(threshold) or not 0 <= threshold < 1:
+            errors.append("reward_audit.min_relative_improvement must be in [0, 1)")
+    except AttributeError:
+        errors.append("reward_audit must be an object")
 
     try:
-        quantiles = config["data"]["quantiles"]
-        if not quantiles or any(isinstance(q, bool) or not isinstance(q, (int, float))
-                                or not math.isfinite(q) or not 0 < q < 1 for q in quantiles):
-            errors.append("data.quantiles must be nonempty numbers strictly between 0 and 1")
-        elif list(quantiles) != sorted(set(quantiles)):
-            errors.append("data.quantiles must be strictly increasing and unique")
-    except (KeyError, TypeError):
-        errors.append("data.quantiles must be nonempty")
+        validate_temporal_config(config["data"])
+    except (KeyError, TypeError, ConfigValidationError) as exc:
+        errors.append(str(exc))
 
     try:
         temperature = config["rl"]["sampling_temperature"]

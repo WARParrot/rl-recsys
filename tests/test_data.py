@@ -5,7 +5,8 @@ from rl_recsys.data import prepare_arrays
 
 def cfg():
     return {"seed": 42, "data": {"users": 10, "catalog_size": 20, "context_length": 3,
-            "quantiles": [.6, .75, .9], "max_train": 100, "max_valid": 100, "max_test": 100},
+            "quantiles": [.6, .75, .9], "allow_derived_cutoffs": True,
+            "max_train": 100, "max_valid": 100, "max_test": 100},
             "rl": {"seconds_cap": 600}}
 
 
@@ -28,6 +29,30 @@ def test_preparation_is_deterministic_and_strict():
     assert audit["ambiguous_timestamp_groups"] == 0
     assert audit["ambiguous_users"] == 0
     assert np.all(a["fit_context"][:, -1] != 0)
+    assert audit["cutoff_source"] == "legacy_sample_quantiles_future_inclusive"
+    assert audit["audit_metadata"]["future_information_used_for_cutoff_formation"] is True
+
+
+def test_frozen_cutoffs_are_used_without_future_quantile_formation():
+    x = raw()
+    c = cfg()
+    c["data"]["cutoffs"] = [3, 4, 5]
+    c["data"]["allow_derived_cutoffs"] = False
+    prepared, audit = prepare_arrays(x, c)
+    assert audit["cutoffs"] == [3, 4, 5]
+    # Alter the future volume/range without changing any earlier observations.
+    future = {name: values[-4:].copy() for name, values in x.items()}
+    future["timestamp"][:] = [100, 101, 102, 103]
+    extended = {name: np.concatenate([values, future[name]]) for name, values in x.items()}
+    changed, _ = prepare_arrays(extended, c)
+    for key in prepared:
+        if key.startswith(("fit_", "calibration_", "selection_")) or key in ("vocab", "popularity", "durations", "cutoffs"):
+            np.testing.assert_array_equal(prepared[key], changed[key])
+    assert np.all(prepared["calibration_timestamp"] == 3)
+    assert np.all(prepared["selection_timestamp"] == 4)
+    assert np.all(prepared["test_timestamp"] == 5)
+    assert audit["cutoff_source"] == "frozen_calendar_config"
+    assert audit["audit_metadata"]["future_information_used_for_cutoff_formation"] is False
 
 
 def test_same_timestamp_rows_excluded_and_audited():

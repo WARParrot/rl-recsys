@@ -2,14 +2,34 @@
 from __future__ import annotations
 
 import json
-import resource
+import math
+import sys
 import time
 from typing import Any
+
+try:
+    import resource
+except ImportError:  # resource is unavailable on Windows
+    resource = None
 
 import torch
 
 from .config import validate_config
 from .models import Policy, RewardModel
+
+
+def _cpu_max_rss_mb() -> float | None:
+    """Return peak process RSS in MiB, or None when unavailable."""
+    if resource is None:
+        return None
+    try:
+        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # macOS reports bytes; Linux and other supported Unix systems use KiB.
+        divisor = 2**20 if sys.platform == "darwin" else 1024
+        value = usage / divisor
+        return round(value, 2) if math.isfinite(value) and value >= 0 else None
+    except (AttributeError, OSError, TypeError, ValueError, OverflowError):
+        return None
 
 
 def run_preflight(config: dict[str, Any], *, device: str | None = None) -> dict[str, Any]:
@@ -55,9 +75,7 @@ def run_preflight(config: dict[str, Any], *, device: str | None = None) -> dict[
         torch.cuda.synchronize(requested)
     reward_seconds = time.perf_counter() - started
 
-    memory: dict[str, Any] = {
-        "cpu_max_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 2),
-    }
+    memory: dict[str, Any] = {"cpu_max_rss_mb": _cpu_max_rss_mb()}
     if requested.type == "cuda":
         memory.update({
             "gpu_allocated_mb": round(torch.cuda.memory_allocated(requested) / 2**20, 2),

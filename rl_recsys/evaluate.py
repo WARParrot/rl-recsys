@@ -57,7 +57,8 @@ def paired_interval(before, after, users, replicates=2000, seed=2026):
 
 
 @torch.no_grad()
-def exact_one_step_expected_reward(policy, reward_model, contexts, users, batch_size=256, temperature=1.0, device=None):
+def exact_one_step_expected_reward(policy, reward_model, contexts, users, batch_size=256, temperature=1.0, device=None,
+                                   deadline=None, logits=None):
     """Return (user-macro reward, per-context rewards) without action sampling.
 
     Integrates softmax(policy logits / temperature) against reward head zero over
@@ -80,14 +81,23 @@ def exact_one_step_expected_reward(policy, reward_model, contexts, users, batch_
     reward_model.eval()
     values = []
     for start in range(0, len(contexts), batch_size):
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("Deadline reached during exact one-step evaluation")
         context = contexts[start:start + batch_size].to(device=device, dtype=torch.long)
-        probabilities = (policy(context).float() / temperature).softmax(-1)
+        scores = policy(context) if logits is None else logits[start:start + batch_size]
+        probabilities = (scores.float() / temperature).softmax(-1)
         history = reward_model.history(context)
-        catalog = torch.arange(probabilities.shape[-1], device=device) + 2
-        expanded_history = history[:, None, :].expand(-1, len(catalog), -1).reshape(-1, history.shape[-1])
-        items = catalog.expand(len(context), -1).reshape(-1)
-        rewards = reward_model.from_history(expanded_history, items).reshape(len(context), len(catalog), -1)[:, :, 0]
-        values.append((probabilities * rewards).sum(-1).cpu())
+        expected = torch.zeros(len(context), device=device)
+        # Bound the B x catalog x hidden intermediate on large catalogs.
+        for offset in range(0, probabilities.shape[-1], batch_size):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise TimeoutError("Deadline reached during exact one-step evaluation")
+            catalog = torch.arange(offset, min(offset + batch_size, probabilities.shape[-1]), device=device) + 2
+            expanded_history = history[:, None, :].expand(-1, len(catalog), -1).reshape(-1, history.shape[-1])
+            items = catalog.expand(len(context), -1).reshape(-1)
+            rewards = reward_model.from_history(expanded_history, items).reshape(len(context), len(catalog), -1)[:, :, 0]
+            expected += (probabilities[:, offset:offset + len(catalog)] * rewards).sum(-1)
+        values.append(expected.cpu())
     values = torch.cat(values)
     return macro(values.numpy(), users)[0], values.numpy()
 
@@ -116,6 +126,34 @@ def sampling_diagnostic(before, after, users):
             "uncertainty": "descriptive variation across retained action draws; not a confidence interval or training-seed uncertainty"}
 
 
+def action_support_diagnostic(recommendations, reward_scores, support_targets, users=None):
+    """Quantify empirical action support and score shift (not propensity/OPE)."""
+    rec = np.asarray(recommendations)
+    scores = np.asarray(reward_scores)
+    support_targets = np.asarray(support_targets)
+    if (rec.ndim != 2 or not rec.size or scores.shape != rec.shape
+            or support_targets.ndim != 1 or not np.isfinite(scores).all()):
+        raise ValueError("recommendations, reward_scores, and support_targets have incompatible shapes or scores")
+    support = np.unique(support_targets[support_targets >= 2])
+    if rec.dtype.kind not in "iu" or np.any(rec < 2):
+        raise ValueError("recommendations, reward_scores, and support_targets have incompatible shapes")
+    mask = np.isin(rec, support)
+    flat_scores = scores.reshape(-1)
+    flat_mask = mask.reshape(-1)
+    result = {"support_unique_actions": int(len(support)),
+              "recommendation_actions": int(mask.size),
+              "unsupported_action_rate": float((~flat_mask).mean()),
+              "supported_action_rate": float(flat_mask.mean()),
+              "supported_unique_action_rate": float(np.isin(np.unique(rec), support).mean()),
+              "reward_score_mean": float(flat_scores.mean())}
+    for label, group in (("supported", flat_mask), ("unsupported", ~flat_mask)):
+        result[f"{label}_actions"] = int(group.sum())
+        result[f"{label}_reward_score_mean"] = float(flat_scores[group].mean()) if group.any() else None
+    if users is not None:
+        result["user_macro_unsupported_rate"] = macro((~mask).mean(1), users)[0]
+    return result
+
+
 def ranking_metrics(recs, targets):
     hits = recs == np.asarray(targets)[:, None]
     recall = hits.any(1).astype(float)
@@ -130,8 +168,8 @@ def evaluate(policy, rm, auditor, subset, data, cfg, device, mode="policy", dead
     batch_size = cfg["evaluation"]["batch_size"]
     k = min(cfg["evaluation"]["k"], len(data["vocab"]))
     action_samples = max(1, int(cfg["evaluation"].get("action_samples", 1)))
-    rows = {key: [] for key in ["recommendations", "sample_reward", "sample_audit", "sample_seconds",
-                               "sample_reward_draws", "sample_audit_draws", "top_reward", "top_audit",
+    rows = {key: [] for key in ["recommendations", "exact_one_step_expected_reward", "sample_reward", "sample_audit", "sample_seconds",
+                               "sample_reward_draws", "sample_audit_draws", "top_reward", "top_reward_actions", "sample_actions", "top_audit",
                                "repeat", "duration", "popularity"]}
     generator = torch.Generator(device=device).manual_seed(cfg["seed"] + 10000)
     for start in range(0, len(subset["target"]), batch_size):
@@ -149,6 +187,11 @@ def evaluate(policy, rm, auditor, subset, data, cfg, device, mode="policy", dead
             scores = scores.log_softmax(-1) + cfg["rl"]["rerank_weight"] * rm.catalog(context)[:, :, 0]
         elif mode != "policy":
             raise ValueError(mode)
+        _, exact = exact_one_step_expected_reward(
+            policy, rm, context, subset["uid"][start:start + batch_size],
+            batch_size=batch_size, temperature=cfg["rl"]["sampling_temperature"],
+            device=device, deadline=deadline, logits=scores)
+        rows["exact_one_step_expected_reward"].append(np.asarray(exact).reshape(-1))
         # Stable score-descending ties use ascending token/item ID.
         rec = torch.argsort(scores, dim=-1, descending=True, stable=True)[:, :k]
         dist = (scores / cfg["rl"]["sampling_temperature"]).softmax(-1)
@@ -162,12 +205,14 @@ def evaluate(policy, rm, auditor, subset, data, cfg, device, mode="policy", dead
         top_r = rm.from_history(rh[:, None, :].expand(-1, k, -1), rec + 2)
         top_a = auditor.from_history(ah[:, None, :].expand(-1, k, -1), rec + 2)
         rows["recommendations"].append(rec_np + 2)
+        rows["sample_actions"].append(actions.cpu().numpy() + 2)
         rows["sample_reward"].append(sample_r[:, :, 0].mean(1).cpu().numpy())
         rows["sample_seconds"].append(sample_r[:, :, 1].mean(1).cpu().numpy())
         rows["sample_audit"].append(sample_a[:, :, 0].mean(1).cpu().numpy())
         rows["sample_reward_draws"].append(sample_r[:, :, 0].cpu().numpy())
         rows["sample_audit_draws"].append(sample_a[:, :, 0].cpu().numpy())
         rows["top_reward"].append(top_r[:, :, 0].mean(1).cpu().numpy())
+        rows["top_reward_actions"].append(top_r[:, :, 0].cpu().numpy())
         rows["top_audit"].append(top_a[:, :, 0].mean(1).cpu().numpy())
         rows["repeat"].append(((rec + 2)[:, :, None] == context[:, None, :]).any(-1).float().mean(1).cpu().numpy())
         rows["duration"].append(data["durations"][rec_np].mean(1))
@@ -176,7 +221,7 @@ def evaluate(policy, rm, auditor, subset, data, cfg, device, mode="policy", dead
     out["recall"], out["ndcg"] = ranking_metrics(out["recommendations"], subset["target"])
     out["uid"] = subset["uid"]
     summary = {key: macro(out[key], out["uid"])[0] for key in out
-               if key not in ["uid", "recommendations", "sample_reward_draws", "sample_audit_draws"]}
+               if key not in ["uid", "recommendations", "sample_reward_draws", "sample_audit_draws", "top_reward_actions", "sample_actions"]}
     summary["sample_reward_sampling_sd"] = float(np.std([
         macro(out["sample_reward_draws"][:, i], out["uid"])[0] for i in range(action_samples)], ddof=1
     )) if action_samples > 1 else 0.0
@@ -188,11 +233,19 @@ def evaluate(policy, rm, auditor, subset, data, cfg, device, mode="policy", dead
                    eligible_target_users=len(eligible_users),
                    target_coverage=float(eligible.mean()),
                    eligible_ndcg=macro(out["ndcg"][eligible], subset["uid"][eligible])[0] if eligible.any() else None,
+                   eligible_exact_one_step_expected_reward=macro(out["exact_one_step_expected_reward"][eligible], subset["uid"][eligible])[0] if eligible.any() else None,
                    eligible_sample_reward=macro(out["sample_reward"][eligible], subset["uid"][eligible])[0] if eligible.any() else None,
                    eligible_sample_audit=macro(out["sample_audit"][eligible], subset["uid"][eligible])[0] if eligible.any() else None,
                    catalog_coverage=len(np.unique(out["recommendations"])) / len(data["vocab"]))
     _, counts = np.unique(out["recommendations"], return_counts=True)
     summary["recommendation_hhi"] = float(((counts / counts.sum()) ** 2).sum())
+    if "fit_target" in data:
+        summary["action_support"] = action_support_diagnostic(
+            out["recommendations"], out["top_reward_actions"],
+            data["fit_target"], out["uid"])
+        summary["sample_action_support"] = action_support_diagnostic(
+            out["sample_actions"], out["sample_reward_draws"], data["fit_target"], out["uid"])
+        summary["action_support"]["reference"] = "retained eligible fit targets; marginal item support only, not context-action or causal support"
     return summary, out
 
 

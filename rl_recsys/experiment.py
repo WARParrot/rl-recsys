@@ -17,7 +17,8 @@ from torch.nn import functional as F
 
 from .data import load_prepared, role, sha256
 from .models import Policy, RewardModel, append_action, reinforce_loss
-from .evaluate import evaluate, macro, paired_interval, sampling_diagnostic, rollout_diagnostics
+from .evaluate import (evaluate, macro, paired_interval, sampling_diagnostic,
+                       rollout_diagnostics)
 from .config import validate_config
 from .artifacts import COMPLETION_FILE, EVALUATION_FILES, complete_evaluation
 
@@ -251,6 +252,32 @@ def evaluation_decisions(h1_decision, h2_decision):
                          "H3": "exploratory reuse; no confirmatory verdict"}}
 
 
+def reward_gate(audit, cfg):
+    """Return per-head RL eligibility from the persisted pre-RL audit.
+
+    A head must beat the fit-only item-mean baseline by the configured margin;
+    a failed head is disabled rather than silently used as an optimization
+    objective.  The gate is deliberately evaluated before any RL candidate.
+    """
+    settings = cfg.get("reward_audit", {})
+    threshold = settings.get("min_relative_improvement", 0.0)
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not np.isfinite(threshold) or not 0 <= threshold < 1:
+        raise ValueError("reward_audit.min_relative_improvement must be in [0, 1)")
+    decisions = {}
+    for name, report in audit["heads"].items():
+        relative = report["paired_mae"].get("relative_difference")
+        passed = (relative is not None and relative < 0 and relative <= -threshold
+                  and report.get("mae", 0) < report.get("constant_mae", float("inf")))
+        decisions[name] = {"enabled": bool(passed),
+                           "relative_difference": relative,
+                           "min_relative_improvement": threshold,
+                           "reason": "beats constant and item-mean" if passed else "weak versus constant or item-mean"}
+    return {"status": "passed" if any(decisions.get(name, {}).get("enabled", False)
+                                         for name in cfg["rl"]["rewards"]) else "failed",
+            "heads": decisions,
+            "enabled_rewards": [name for name, value in decisions.items() if value["enabled"]]}
+
+
 def select_candidate(candidates, base_summary, cfg):
     """Select only from the declared eligible completion/horizon-1 population.
 
@@ -260,7 +287,11 @@ def select_candidate(candidates, base_summary, cfg):
     eligible = [c for c in candidates
                 if c["reward"] == "completion" and c["horizon"] == 1
                 and c["selection"]["eligible_ndcg"] >= cfg["rl"]["relevance_floor"] * base_summary["eligible_ndcg"]]
-    return max(eligible, key=lambda c: c["selection"]["eligible_sample_reward"]) if eligible else None
+    def objective(candidate):
+        selection = candidate["selection"]
+        exact = selection.get("eligible_exact_one_step_expected_reward")
+        return selection.get("eligible_sample_reward", float("-inf")) if exact is None else exact
+    return max(eligible, key=objective) if eligible else None
 
 
 def train(config, data_dir, run_dir):
@@ -294,13 +325,27 @@ def train(config, data_dir, run_dir):
     auditor = RewardModel(*args, mean_history=True).to(device)
     logs["auditor"] = fit_supervised(auditor, fit, calibration, cfg["train"]["reward_steps"], run / "auditor.pt", cfg, device, deadline, True,
                                       progress_path=progress_path, phase="auditor")
+    # Calibration is time-forward from fit and is audited before any RL work.
+    reward_audit = reward_report(rm, auditor, fit, role(data, "calibration", True), cfg, device, data, deadline=deadline)
+    reward_audit["role"] = "calibration"
+    reward_audit["limitations"] = "Calibration also selects checkpoints; this is not an independent audit period."
+    reward_audit["checkpoint_hashes"] = {name: sha256(run / name)
+                                          for name in ["sft.pt", "reward.pt", "auditor.pt"]}
+    reward_audit["provenance_sha256"] = sha256(run / "provenance.json")
+    reward_audit["gate"] = reward_gate(reward_audit, cfg)
+    dump(run / "training.json", logs)
+    dump(run / "reward_audit.json", reward_audit)
+    if reward_audit["gate"]["status"] == "failed":
+        raise RuntimeError("Pre-RL reward audit gate failed; no RL candidates were trained")
     reference = freeze(copy.deepcopy(policy))
     freeze(rm)
     freeze(auditor)
     base_summary, _ = evaluate(policy, rm, auditor, selection, data, cfg, device, deadline=deadline)
     candidates = []
+    dump(run / "candidates.json", candidates)
+    enabled_rewards = set(reward_audit["gate"]["enabled_rewards"])
     for reward_index, reward_name in enumerate(["completion", "seconds"]):
-        if reward_name not in cfg["rl"]["rewards"]:
+        if reward_name not in cfg["rl"]["rewards"] or reward_name not in enabled_rewards:
             continue
         for horizon in cfg["rl"]["horizons"]:
             for beta in cfg["rl"]["betas"]:
@@ -320,7 +365,7 @@ def train(config, data_dir, run_dir):
     # H2 is completion-only, horizon 1. Other grid members are exploratory.
     chosen = select_candidate(candidates, base_summary, cfg)
     dump(run / "selection.json", {"baseline": base_summary, "chosen": chosen,
-                                  "rule": "horizon1 completion; eligible-NDCG relevance floor then max eligible sampled completion proxy",
+                                  "rule": "horizon1 completion; eligible-NDCG relevance floor then max eligible exact one-step completion proxy",
                                   "all_candidates_failed_floor": chosen is None})
     dump(run / "training.json", logs)
     chosen = json.loads((run / "selection.json").read_text()).get("chosen")
@@ -331,6 +376,7 @@ def train(config, data_dir, run_dir):
                 "training_sha256": sha256(run / "training.json"),
                 "provenance_sha256": sha256(run / "provenance.json"),
                 "prepared_audit_sha256": sha256(Path(data_dir) / "audit.json"),
+                "reward_audit_sha256": sha256(run / "reward_audit.json"),
                 "selected_checkpoint": (f'{chosen["name"]}.pt' if chosen else None)}
     if chosen and manifest["selected_checkpoint"] not in manifest["checkpoint_hashes"]:
         raise RuntimeError("Selected checkpoint is missing from the training manifest")
@@ -338,10 +384,13 @@ def train(config, data_dir, run_dir):
 
 
 @torch.no_grad()
-def reward_report(rm, auditor, fit, test, cfg, device, data=None):
+def reward_report(rm, auditor, fit, test, cfg, device, data=None, deadline=None):
+    rm.eval()
+    auditor.eval()
     predictions = []
     audit_predictions = []
     for start in range(0, len(test["target"]), cfg["evaluation"]["batch_size"]):
+        check_deadline(deadline, "reward audit")
         end = start + cfg["evaluation"]["batch_size"]
         ctx = torch.as_tensor(test["context"][start:end], device=device)
         items = torch.as_tensor(test["target"][start:end], device=device)
@@ -364,6 +413,8 @@ def reward_report(rm, auditor, fit, test, cfg, device, data=None):
                   "mae": macro(error, test["uid"])[0],
                   "rmse": macro((pred[:, head] - y)**2, test["uid"])[0]**.5,
                   "auditor_mae": macro(np.abs(apred[:, head] - y), test["uid"])[0],
+                  "auditor_paired_mae": paired_interval(baseline_error, np.abs(apred[:, head] - y), test["uid"],
+                                                       cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"]),
                   "constant_mae": macro(np.abs(mean-y), test["uid"])[0],
                   "item_mean_mae": macro(baseline_error, test["uid"])[0],
                   "paired_mae": paired_interval(baseline_error, error, test["uid"], cfg["evaluation"]["bootstrap"],
@@ -401,7 +452,7 @@ def final_evaluation(data_dir, run_dir):
     for name, digest in ready["checkpoint_hashes"].items():
         if sha256(run / name) != digest:
             raise ValueError("Checkpoint changed after selection")
-    for name in ["selection.json", "candidates.json", "training.json", "provenance.json"]:
+    for name in ["selection.json", "candidates.json", "training.json", "provenance.json", "reward_audit.json"]:
         key = name.replace(".json", "_sha256")
         if sha256(run / name) != ready[key]:
             raise ValueError(f"{name} changed after selection")
@@ -452,7 +503,7 @@ def final_evaluation(data_dir, run_dir):
                 **{metric: paired_interval(base[metric][eligible_mask], raw[metric][eligible_mask],
                                            test["uid"][eligible_mask], cfg["evaluation"]["bootstrap"],
                                            cfg["evaluation"]["bootstrap_seed"])
-                   for metric in ["sample_reward", "sample_audit"]},
+                   for metric in ["exact_one_step_expected_reward", "sample_reward", "sample_audit"]},
                 "eligible_ndcg": paired_interval(base["ndcg"][eligible_mask], raw["ndcg"][eligible_mask],
                                                    test["uid"][eligible_mask], cfg["evaluation"]["bootstrap"],
                                                    cfg["evaluation"]["bootstrap_seed"]),
@@ -472,7 +523,7 @@ def final_evaluation(data_dir, run_dir):
     h2_decision = "not supported"
     if selected:
         comparison = results["policies"][selected["name"]]["paired_vs_sft"]
-        gain, relevance = comparison["sample_reward"], comparison["eligible_ndcg"]
+        gain, relevance = comparison["exact_one_step_expected_reward"], comparison["eligible_ndcg"]
         if gain["adequate_users"] and relevance["relative_ci95"] is not None:
             ok = gain["relative_ci95"] is not None and gain["relative_ci95"][0] >= .05 and relevance["relative_ci95"][0] > -.02
             h2_decision = "supported (proxy-only)" if ok else "not supported"
@@ -481,6 +532,10 @@ def final_evaluation(data_dir, run_dir):
     # This test interval is reused for the amended protocol: numbers remain
     # descriptive, but cannot be emitted as unqualified confirmatory verdicts.
     results.update(evaluation_decisions(h1_decision, h2_decision))
+    results["primary_horizon1_diagnostic"] = {
+        name: results["policies"][name].get("exact_one_step_expected_reward")
+        for name in ["sft"] + ([selected["name"]] if selected else [])
+    }
     results["selected"] = selected["name"] if selected else None
     results["limitations"] = ["No exposure probabilities, user simulator validation or causal identification",
         "Independent auditor shares observational bias and is only a disagreement diagnostic",
