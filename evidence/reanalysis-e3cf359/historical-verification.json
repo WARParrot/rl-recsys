@@ -1,0 +1,395 @@
+{
+  "status": "verified",
+  "inputs": {
+    "status": "verified",
+    "checkpoint_hashes": {
+      "auditor.pt": "bc32955de57003fbcb19d2bfc2490c987f253b39450dc6a7ed3d1e308ac8aabf",
+      "reward.pt": "1e266cd716712fc6f2cea5dee6f0bf3adf925f5a226985976da6cd861121e90f",
+      "rl_completion_h1_b0.01.pt": "e82b5e258541aa4efbf96ed2a97e3e174340a389bc84cafd7d8e723fa2880fa0",
+      "rl_completion_h1_b0.1.pt": "89afd06abc2a263d443f0e71479d5ba990bf1b4c92cdf8af761ca0a06f4c35c7",
+      "rl_completion_h1_b1.pt": "b074fa3a407acfa3e1b5d9402bbf0623f81b4f055af6ccac569631d3e65e1b92",
+      "rl_completion_h5_b0.01.pt": "8102077d4b95f39dd3b310607b6e551bfccf800431c104ff60ec910cae7b12e0",
+      "rl_completion_h5_b0.1.pt": "84014d2945fec975c800b52b4d4f06d8d1689514a15f3cb5d5028d40918781b2",
+      "rl_completion_h5_b1.pt": "311ff44e25fb6f454039bedaa58384357e45c0a525d7485e8fd395f892e6e3cb",
+      "sft.pt": "51ec2c22f680df289bc1eae80236e4ab5d4005246a22800f06c57652a2260c5f"
+    },
+    "prepared_sha256": "b30da6213320d94b8d3acc6f18e77a33b6e5f68c5db6b2a4c7e15f759888397e",
+    "historical_provenance_sha256": "b8a8fbe404cbdb8a6b1bc7d8dc791d062c3b55b48cc4412874284a2d5db99615",
+    "historical_results_sha256": "27416b68c57fc2fbe537d761f5425480496657177c48912559f4a91913d09c05",
+    "historical_revision": "68578e4ae753214b506d146e04f8207686b3c852"
+  },
+  "examples": 10000,
+  "eligible_examples": 5083,
+  "policies": {
+    "popularity": {
+      "all_target_recall": 0.008294092027220486,
+      "all_target_ndcg": 0.0032563140825228663,
+      "eligible_ndcg": 0.006310176576807041,
+      "eligible_expected_reward": 0.7291544221237091,
+      "all_target_expected_reward": 0.7229474176236851,
+      "coverage": 0.0005,
+      "hhi": 0.10000000000000003,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.006310176576807041,
+          "difference": -0.0381839302086481,
+          "ci95": [
+            -0.04776556687583966,
+            -0.029457571068712968
+          ],
+          "relative_difference": -0.858179497630239,
+          "relative_ci95": [
+            -0.9083489337451686,
+            -0.7946377692498459
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7291544221237091,
+          "difference": 1.5447105858504037e-05,
+          "ci95": [
+            -9.55283509889604e-05,
+            0.0001169734124303517
+          ],
+          "relative_difference": 2.1185406880844248e-05,
+          "relative_ci95": [
+            -0.00013089687379326564,
+            0.0001602268421106476
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "rerank": {
+      "all_target_recall": 0.03697092699345887,
+      "all_target_ndcg": 0.02179769434767086,
+      "eligible_ndcg": 0.045191515785827814,
+      "eligible_expected_reward": 0.7299605193258107,
+      "all_target_expected_reward": 0.723722774721701,
+      "coverage": 0.2951,
+      "hhi": 0.0010313754,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.045191515785827814,
+          "difference": 0.0006974090003726713,
+          "ci95": [
+            -7.372128362165623e-05,
+            0.0019142847568894966
+          ],
+          "relative_difference": 0.015674188128677054,
+          "relative_ci95": [
+            -0.0017698215911481257,
+            0.04243491575371878
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7299605193258107,
+          "difference": 0.0008215443079600579,
+          "ci95": [
+            0.0007924864402186149,
+            0.0008507389974645146
+          ],
+          "relative_difference": 0.0011267321266703598,
+          "relative_ci95": [
+            0.0010749651154920165,
+            0.0011812181125478492
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "rl_completion_h1_b0.01": {
+      "all_target_recall": 0.035749500415671896,
+      "all_target_ndcg": 0.021341721930569307,
+      "eligible_ndcg": 0.044024186891021104,
+      "eligible_expected_reward": 0.7296956251718278,
+      "all_target_expected_reward": 0.7234303869066318,
+      "coverage": 0.2876,
+      "hhi": 0.0011794782,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.044024186891021104,
+          "difference": -0.00046991989443404,
+          "ci95": [
+            -0.0019839438874313916,
+            0.00123484024511088
+          ],
+          "relative_difference": -0.010561396292320984,
+          "relative_ci95": [
+            -0.04498046792982485,
+            0.02611182093685141
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7296956251718278,
+          "difference": 0.0005566501539773362,
+          "ci95": [
+            0.0005167112512960509,
+            0.0005968031631853332
+          ],
+          "relative_difference": 0.0007634349185127347,
+          "relative_ci95": [
+            0.0007049225309102667,
+            0.0008225853686287648
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "rl_completion_h1_b0.1": {
+      "all_target_recall": 0.03663909156889255,
+      "all_target_ndcg": 0.02201108357976941,
+      "eligible_ndcg": 0.04557705914463154,
+      "eligible_expected_reward": 0.7295032751346303,
+      "all_target_expected_reward": 0.723235038118953,
+      "coverage": 0.29245,
+      "hhi": 0.0010669616000000002,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.04557705914463154,
+          "difference": 0.0010829523591764003,
+          "ci95": [
+            -7.3759761083320966e-06,
+            0.00248030051522635
+          ],
+          "relative_difference": 0.024339231359295558,
+          "relative_ci95": [
+            -0.00016304753291997452,
+            0.05493691741262365
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7295032751346303,
+          "difference": 0.00036430011677981305,
+          "ci95": [
+            0.0003396284003590294,
+            0.0003907820740879475
+          ],
+          "relative_difference": 0.000499630563255465,
+          "relative_ci95": [
+            0.0004626773861050699,
+            0.0005393908544940939
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "rl_completion_h1_b1": {
+      "all_target_recall": 0.036799195215990885,
+      "all_target_ndcg": 0.021861877479180846,
+      "eligible_ndcg": 0.04530159674981026,
+      "eligible_expected_reward": 0.7293145551964353,
+      "all_target_expected_reward": 0.7230543107016708,
+      "coverage": 0.29475,
+      "hhi": 0.0010304544,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.04530159674981026,
+          "difference": 0.0008074899643551273,
+          "ci95": [
+            -5.4463829654663455e-05,
+            0.0020789030986427958
+          ],
+          "relative_difference": 0.018148245300186175,
+          "relative_ci95": [
+            -0.0012019680845195143,
+            0.045785883692706815
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7293145551964353,
+          "difference": 0.00017558017858468306,
+          "ci95": [
+            0.0001651550497541149,
+            0.00018636506727756627
+          ],
+          "relative_difference": 0.0002408048185606277,
+          "relative_ci95": [
+            0.0002254908492303007,
+            0.0002571230077789777
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "rl_completion_h5_b0.01": {
+      "all_target_recall": 0.03453030537514627,
+      "all_target_ndcg": 0.020212070760640008,
+      "eligible_ndcg": 0.041887137139440825,
+      "eligible_expected_reward": 0.7295912983320343,
+      "all_target_expected_reward": 0.7233241488039601,
+      "coverage": 0.29495,
+      "hhi": 0.0013369687999999998,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.041887137139440825,
+          "difference": -0.00260696964601432,
+          "ci95": [
+            -0.005635111540228794,
+            0.0004958683610037161
+          ],
+          "relative_difference": -0.05859134690768805,
+          "relative_ci95": [
+            -0.12609922945031585,
+            0.01166676855651551
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7295912983320343,
+          "difference": 0.0004523233141835968,
+          "ci95": [
+            0.00041124068005043426,
+            0.0004957173876653093
+          ],
+          "relative_difference": 0.0006203526758017319,
+          "relative_ci95": [
+            0.0005644148215285343,
+            0.0006801633200713223
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "rl_completion_h5_b0.1": {
+      "all_target_recall": 0.03543814676438877,
+      "all_target_ndcg": 0.022115372911462317,
+      "eligible_ndcg": 0.045240648646098745,
+      "eligible_expected_reward": 0.7294906162480971,
+      "all_target_expected_reward": 0.7232199574650506,
+      "coverage": 0.29535,
+      "hhi": 0.0010541918000000002,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.045240648646098745,
+          "difference": 0.0007465418606436049,
+          "ci95": [
+            -0.0011710914012043518,
+            0.0034396079857837696
+          ],
+          "relative_difference": 0.016778443586772742,
+          "relative_ci95": [
+            -0.02688532420261098,
+            0.07662383258594425
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7294906162480971,
+          "difference": 0.00035164123024648597,
+          "ci95": [
+            0.0003235806905281552,
+            0.00038525938567500196
+          ],
+          "relative_difference": 0.00048226914524468787,
+          "relative_ci95": [
+            0.0004417011858049197,
+            0.0005293161038909079
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "rl_completion_h5_b1": {
+      "all_target_recall": 0.03686153387537561,
+      "all_target_ndcg": 0.021845634635511386,
+      "eligible_ndcg": 0.04522656100867297,
+      "eligible_expected_reward": 0.7292988116788074,
+      "all_target_expected_reward": 0.7230387491026019,
+      "coverage": 0.29585,
+      "hhi": 0.0010246518,
+      "paired_vs_sft": {
+        "eligible_ndcg": {
+          "users": 733,
+          "before": 0.044494106785455144,
+          "after": 0.04522656100867297,
+          "difference": 0.0007324542232178309,
+          "ci95": [
+            -5.809586973357077e-05,
+            0.0019498669132470296
+          ],
+          "relative_difference": 0.0164618255345506,
+          "relative_ci95": [
+            -0.0013157334562739966,
+            0.043318607076371016
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        },
+        "eligible_expected_reward": {
+          "users": 733,
+          "before": 0.7291389750178506,
+          "after": 0.7292988116788074,
+          "difference": 0.00015983666095693876,
+          "ci95": [
+            0.00015097806405796888,
+            0.000168606502646379
+          ],
+          "relative_difference": 0.00021921288867166234,
+          "relative_ci95": [
+            0.00020622392340327006,
+            0.0002322590773895797
+          ],
+          "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
+          "adequate_users": true
+        }
+      }
+    },
+    "sft": {
+      "all_target_recall": 0.03697080340107045,
+      "all_target_ndcg": 0.02153121599179627,
+      "eligible_ndcg": 0.044494106785455144,
+      "eligible_expected_reward": 0.7291389750178506,
+      "all_target_expected_reward": 0.7228879881183884,
+      "coverage": 0.29535,
+      "hhi": 0.001028455
+    }
+  },
+  "boundary": "ranking recomputed from targets; RM expectations remain saved outputs, not new inference"
+}

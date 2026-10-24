@@ -1,5 +1,18 @@
 # Pilot seed 42 — uploaded run results
 
+## Verified frozen-checkpoint reanalysis (analysis revision e3cf359)
+
+The updated Windows/GPU inference completed in **155.75 seconds**, with **535.5 MiB peak allocated CUDA memory** (not total process VRAM; excludes setup). All 12 completion hashes, embedded source identity, exported historical input arrays and all ten policies' target-based Recall/NDCG arrays were verified. No new training occurred; the test remains exploratory reuse.
+
+- **History sensitivity:** original completion MAE 0.339790; cross-user whole-history replacement 0.363707 (**+7.04%, CI [+3.43%, +10.46%]**); all-UNK 0.378121 (**+11.28%, CI [+8.40%, +14.10%]**). This establishes useful dependence within the fitted RM, not superiority over a newly trained item-only model or causal personalization.
+- **Reranking:** selection-only search over `[0, .1, 1, 10]` selects **1**, identical to the historical weight. Weight 10 fails the relevance floor. The main negative RL conclusion is unchanged.
+- **Matched step-five RM scores (579 users):** SFT policy/random/popularity/replay = **0.759157 / 0.761059 / 0.755318 / 0.723782**; selected RL = **0.756589 / 0.761714 / 0.755798 / 0.723666**. Score growth under random appends is not distinguishable from policy append in paired saved-trajectory intervals. No RL-specific hacking mechanism is established.
+- **Replay limitation:** actual retained contexts are gapped (mean 133,147.9 native units), not consecutive listens or time-matched sessions. Observed labels are scored only at their actual contexts/targets.
+
+[Results, plots, selection and review](evidence/reanalysis-e3cf359/README.md). This is a compact excerpt; large arrays/weights were available for review but are not committed. Item-only training, new independent RM audit, alternative reward, continued SFT and training-seed repetitions remain pending execution.
+
+## Historical training run
+
 **Artifact:** `pilot-seed42-submission-2.zip`  
 **Code revision:** `68578e4ae753214b506d146e04f8207686b3c852`  
 **Status:** `exploratory_reuse` — the historical test period was inspected before the amended protocol and is not a fresh confirmatory evaluation.

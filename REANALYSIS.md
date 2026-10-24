@@ -4,7 +4,11 @@
 
 The supplied nine checkpoints and prepared data match the historical manifests. CPU verification now reconstructs Recall/NDCG directly from target IDs, verifies every saved relevance array, and reconstructs eligible populations, expected-reward aggregates and paired user intervals. This passed on all nine historical policies. It does not replace model inference.
 
-Implemented, not yet established as new empirical results:
+Returned GPU inference on revision `e3cf359` has now been reviewed: **155.75 seconds**, **535.5 MiB peak allocated CUDA memory**. All 12 completion hashes match; exported inputs agree with the historical data and all ten policies' ranking arrays reconstruct from targets. [Compact evidence and interpretation](evidence/reanalysis-e3cf359/README.md).
+
+Executed diagnostics: selection chooses rerank weight 1; shuffled histories increase completion MAE by 7.04% (CI +3.43% to +10.46%); random/popularity append produce similar score growth to policy append. This strengthens the synthetic-context sensitivity explanation, not an RL-specific hacking claim. Observed replay remains substantially gapped. Fresh training controls below are implemented but **not executed**.
+
+Implemented capabilities (inference items executed; training items pending):
 
 - complete ZIP64 export of historical checkpoints/data plus new evaluation contexts, targets, masks, row IDs and vocabulary;
 - separate current-source reanalysis provenance, immutable historical manifests;
@@ -123,4 +127,4 @@ Historical supervised selection (from training.json): SFT reaches its best recor
 
 ## Verification and remaining limitations
 
-Tests cover imported-manifest corruption/traversal, target-based relevance reconstruction, pickle-free input/diagnostic exports, exact policy gradients, control semantics and tiny real-model CPU inference. GPU execution, Windows batch execution and new training results must be validated on the target machine. Current conclusions stay negative/diagnostic until those outputs are available.
+Tests cover imported-manifest corruption/traversal, target-based relevance reconstruction, pickle-free input/diagnostic exports, exact policy gradients, control semantics and tiny real-model CPU inference. The inference workflow has now executed on the target Windows/GPU machine and its returned artifacts passed review. New follow-up training and full-pipeline multi-seed results remain unexecuted. Current conclusions remain negative/diagnostic; neither code completion nor successful inference validates counterfactual reward or a fresh test.

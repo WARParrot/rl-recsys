@@ -1,0 +1,17 @@
+{
+  "status": "complete",
+  "sha256": {
+    "evaluation-inputs.npz": "9169ebf717209921bbc59dc63bc708091de801beb21ddc4cb20ef4651e12aa73",
+    "learning-auditor.svg": "f9cb6908c583427c674beced5b656379ae66db8a8f69d91269c2a61a9a66969c",
+    "learning-reward.svg": "9070a9865c4ad157fa01a9f86f74226a9ea0ce6a1e333e138394851020310057",
+    "learning-sft.svg": "0ab4fc8d2b16d7515cd2ed8279ad76d2ef3be3cd7d8c6892bad4e0a1cd9f0c9a",
+    "per_example.npz": "fba6762278bcade7092871073deb96955c34ee4c081d675263bc3100b779db5d",
+    "provenance.json": "ef9f24a7fb6e0ae87b287d51b2feb709f889cb1b0350713933254e73bf9023ff",
+    "REPORT.md": "d10bd47a9bf483fe577f0d6af02f81740b952716f91d12ba8411dd27474851c8",
+    "results.json": "acebc9a4cc41415753baad69dc4d4e222c99bde86f9fb09fde7e41a3fe2115b3",
+    "rollout-rl_completion_h1_b0.01.svg": "be42603d0a31ef34ecef8b2c2b86bd6b5f602b566375ce458d54ccf404f5c249",
+    "rollout-sft.svg": "1b0e35634c4387e3b762d5b1fd8dfa80b0f47e966249beb1b970db609defb547",
+    "selection.json": "a1b20883a68c0cdda399b5ede09c570f009893efc89814d9ea4ec7e44da0aebe",
+    "tradeoff.svg": "ef67b75f99eae00a872e6ff0cbca0c6e309fe478d072cee112c3d1ce5f4d352b"
+  }
+}

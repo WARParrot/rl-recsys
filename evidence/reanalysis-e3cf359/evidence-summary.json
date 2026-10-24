@@ -1,0 +1,72 @@
+{
+  "status": "reviewed exploratory frozen-checkpoint inference",
+  "analysis_archive_sha256": "2a1ffa4f760455df777d5fa5fc48e4331544d3c9de317467aa2361de68214f16",
+  "analysis_revision": "e3cf3596b07ddeea672c25e4d10122f39e2c770a",
+  "analysis_code_hashes": {
+    "__init__.py": "9accf7e7aec585f28b58a761f523df73213f3aff8919a3bfe48df3ed24dfeb71",
+    "artifacts.py": "9047c87f3b9e147415d3b04d0ec348418e400892d7a1b1fdb328b86e47b8aa5d",
+    "cli.py": "84263f4b5c8284a6245a2b9097867fd092aac13959af1493989b230c115865e3",
+    "config.py": "dde92fc18ddf3979d118cb9e41ad8e1ce17410055ff621a8653f1cf07ff29b96",
+    "data.py": "3f7b2298d589441c6d4ed766c465f4c1f405ad2580ecdc3eb8bc00e905367510",
+    "diagnostics.py": "bfe0c8c9228393fe1afee7ee52ad688e12e372be2c76dc98c76fd828ef0838bf",
+    "evaluate.py": "c867624673d4f69750943a5669dcf029de2daa10442f456767da29be2b4d488d",
+    "experiment.py": "a1aeb266f7eb021f45228298051dfd08536874df666f0939100b52e122d2ec67",
+    "followup.py": "cf5cdd82b209b0e97766f1c4a193fb4ba05f1f96e694ee22a27c0fe206c527c5",
+    "followup_evaluate.py": "73b8bfcb1595de7063fc062d076a81ba85f834a863aa6b40e8ac9a0c9cb9a9ec",
+    "models.py": "c377a23f9277e3a0c60d3c8ed4f1064dcb00a7ca40b6e33444f1d48297b991b2",
+    "preflight.py": "76f66b7e26ba4936b6bb8099d69253ea566b19e91b457f6373027d0d48061331",
+    "reanalysis.py": "0c53cefe0133d0258d98c30681735449d501dfeab88b53a3c768f2ec0db022bd"
+  },
+  "historical_inputs": {
+    "status": "verified",
+    "checkpoint_hashes": {
+      "auditor.pt": "bc32955de57003fbcb19d2bfc2490c987f253b39450dc6a7ed3d1e308ac8aabf",
+      "reward.pt": "1e266cd716712fc6f2cea5dee6f0bf3adf925f5a226985976da6cd861121e90f",
+      "rl_completion_h1_b0.01.pt": "e82b5e258541aa4efbf96ed2a97e3e174340a389bc84cafd7d8e723fa2880fa0",
+      "rl_completion_h1_b0.1.pt": "89afd06abc2a263d443f0e71479d5ba990bf1b4c92cdf8af761ca0a06f4c35c7",
+      "rl_completion_h1_b1.pt": "b074fa3a407acfa3e1b5d9402bbf0623f81b4f055af6ccac569631d3e65e1b92",
+      "rl_completion_h5_b0.01.pt": "8102077d4b95f39dd3b310607b6e551bfccf800431c104ff60ec910cae7b12e0",
+      "rl_completion_h5_b0.1.pt": "84014d2945fec975c800b52b4d4f06d8d1689514a15f3cb5d5028d40918781b2",
+      "rl_completion_h5_b1.pt": "311ff44e25fb6f454039bedaa58384357e45c0a525d7485e8fd395f892e6e3cb",
+      "sft.pt": "51ec2c22f680df289bc1eae80236e4ab5d4005246a22800f06c57652a2260c5f"
+    },
+    "prepared_sha256": "b30da6213320d94b8d3acc6f18e77a33b6e5f68c5db6b2a4c7e15f759888397e",
+    "historical_provenance_sha256": "b8a8fbe404cbdb8a6b1bc7d8dc791d062c3b55b48cc4412874284a2d5db99615",
+    "historical_results_sha256": "27416b68c57fc2fbe537d761f5425480496657177c48912559f4a91913d09c05",
+    "historical_revision": "68578e4ae753214b506d146e04f8207686b3c852"
+  },
+  "resources": {
+    "elapsed_seconds": 155.75,
+    "cuda_peak_allocated_bytes": 561502208
+  },
+  "gpu": "NVIDIA GeForce RTX 5060 Ti",
+  "verification": [
+    "all 12 COMPLETE hashes match",
+    "embedded source hashes and normalized source match analysis revision",
+    "exported historical inputs match supplied prepared arrays",
+    "all 10 policies Recall/NDCG reconstructed from targets",
+    "cross-user history donor permutation verified"
+  ],
+  "excerpt_sha256": {
+    "COMPLETE.json": "0fdcce79531764136c7c7020c63a5dc64e8dc336129ef05a8e22c15621d70880",
+    "learning-auditor.svg": "f9cb6908c583427c674beced5b656379ae66db8a8f69d91269c2a61a9a66969c",
+    "rollout-rl_completion_h1_b0.01.svg": "be42603d0a31ef34ecef8b2c2b86bd6b5f602b566375ce458d54ccf404f5c249",
+    "REVIEW.md": "b2e5c3e9f3ab173691a29cb439ba8af39d5a931dfb31919f96d1b34bceb8f7d7",
+    "results.json": "acebc9a4cc41415753baad69dc4d4e222c99bde86f9fb09fde7e41a3fe2115b3",
+    "tradeoff.svg": "ef67b75f99eae00a872e6ff0cbca0c6e309fe478d072cee112c3d1ce5f4d352b",
+    "selection.json": "a1b20883a68c0cdda399b5ede09c570f009893efc89814d9ea4ec7e44da0aebe",
+    "learning-sft.svg": "0ab4fc8d2b16d7515cd2ed8279ad76d2ef3be3cd7d8c6892bad4e0a1cd9f0c9a",
+    "rollout-sft.svg": "1b0e35634c4387e3b762d5b1fd8dfa80b0f47e966249beb1b970db609defb547",
+    "REPORT.md": "d10bd47a9bf483fe577f0d6af02f81740b952716f91d12ba8411dd27474851c8",
+    "historical-verification.json": "0451dedd1ef0373293b433dd2d4939e61b55efbb161b74d259c8b0ce8a56ca44",
+    "README.md": "9174a1e834f8ecb2d39445f585db7e79c70ccdfa41ce6bedabd42dd86ab604c3",
+    "learning-reward.svg": "9070a9865c4ad157fa01a9f86f74226a9ea0ce6a1e333e138394851020310057"
+  },
+  "omitted": [
+    "evaluation-inputs.npz",
+    "per_example.npz",
+    "provenance.json",
+    "historical weights and prepared data"
+  ],
+  "scope": "compact excerpt; not a complete reproducibility bundle"
+}
