@@ -2,6 +2,10 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 set "PYTHONUTF8=1"
+if /I "%~1"=="reanalyze" (
+  call "%~dp0run_reanalysis_windows.bat" "%~2" "%~3"
+  exit /b
+)
 set "VENV=%CD%\.venv"
 set "PYTHON_EXE="
 set "RUN_DIR=runs\pilot-seed42"
@@ -97,7 +101,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "& { & '%PY%' -m rl_recsy
 if errorlevel 1 ( type logs\evaluation.stderr.log & exit /b 1 )
 
 call :step "Creating submission bundle"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $ErrorActionPreference='Stop'; $d='%BUNDLE_DIR%'; if (Test-Path $d) { Remove-Item $d -Recurse -Force }; New-Item -ItemType Directory -Path $d -Force | Out-Null; $files=@('configs/pilot.json','logs/nvidia-smi.log','logs/pip-install.log','logs/preflight.json','logs/preflight.stderr.log','logs/tests.log','logs/download.log','logs/prepare.log','logs/training.log','logs/evaluation.stderr.log','data/prepared/audit.json','runs/pilot-seed42/provenance.json','runs/pilot-seed42/reward_audit.json','runs/pilot-seed42/selection.json','runs/pilot-seed42/candidates.json','runs/pilot-seed42/training.json','runs/pilot-seed42/READY_FOR_TEST.json','runs/pilot-seed42/results.json','runs/pilot-seed42/final-evaluation.json','runs/pilot-seed42/per_example.npz','runs/pilot-seed42/evaluation-provenance.json','runs/pilot-seed42/EVALUATION_COMPLETE.json','runs/pilot-seed42/progress.jsonl'); foreach($f in $files) { if(Test-Path $f) { $target=Join-Path $d $f; New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null; Copy-Item $f $target -Force } else { throw ('Missing expected artifact: '+$f) } }; $root=(Resolve-Path $d).Path; $checks=Get-ChildItem $d -File -Recurse | Where-Object { $_.Name -ne 'SHA256SUMS.json' } | ForEach-Object { $h=Get-FileHash $_.FullName -Algorithm SHA256; [pscustomobject]@{sha256=$h.Hash.ToLower(); path=$_.FullName.Substring($root.Length+1).Replace('\\','/')} }; $json=$checks | ConvertTo-Json -Depth 3; [IO.File]::WriteAllText((Join-Path $d 'SHA256SUMS.json'), $json, (New-Object Text.UTF8Encoding($false))); if(Test-Path '%BUNDLE_ZIP%'){Remove-Item '%BUNDLE_ZIP%' -Force}; Compress-Archive -Path (Join-Path $d '*') -DestinationPath '%BUNDLE_ZIP%' -CompressionLevel Optimal }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $ErrorActionPreference='Stop'; $d='%BUNDLE_DIR%'; if (Test-Path $d) { Remove-Item $d -Recurse -Force }; New-Item -ItemType Directory -Path $d -Force | Out-Null; $files=@('configs/pilot.json','logs/nvidia-smi.log','logs/pip-install.log','logs/preflight.json','logs/preflight.stderr.log','logs/tests.log','logs/download.log','logs/prepare.log','logs/training.log','logs/evaluation.stderr.log','data/prepared/audit.json','runs/pilot-seed42/provenance.json','runs/pilot-seed42/reward_audit.json','runs/pilot-seed42/selection.json','runs/pilot-seed42/candidates.json','runs/pilot-seed42/training.json','runs/pilot-seed42/READY_FOR_TEST.json','runs/pilot-seed42/results.json','runs/pilot-seed42/final-evaluation.json','runs/pilot-seed42/per_example.npz','runs/pilot-seed42/evaluation-provenance.json','runs/pilot-seed42/EVALUATION_COMPLETE.json','runs/pilot-seed42/progress.jsonl','data/prepared/prepared.npz'); $files += @(Get-ChildItem '%RUN_DIR%' -Filter '*.pt' -File | ForEach-Object { 'runs/pilot-seed42/' + $_.Name }); foreach($f in $files) { if(Test-Path $f) { $target=Join-Path $d $f; New-Item -ItemType Directory -Path (Split-Path $target) -Force | Out-Null; Copy-Item $f $target -Force } else { throw ('Missing expected artifact: '+$f) } }; $root=(Resolve-Path $d).Path; $checks=Get-ChildItem $d -File -Recurse | Where-Object { $_.Name -ne 'SHA256SUMS.json' } | ForEach-Object { $h=Get-FileHash $_.FullName -Algorithm SHA256; [pscustomobject]@{sha256=$h.Hash.ToLower(); path=$_.FullName.Substring($root.Length+1).Replace('\\','/')} }; $json=$checks | ConvertTo-Json -Depth 3; [IO.File]::WriteAllText((Join-Path $d 'SHA256SUMS.json'), $json, (New-Object Text.UTF8Encoding($false))); if(Test-Path '%BUNDLE_ZIP%'){Remove-Item '%BUNDLE_ZIP%' -Force}; Compress-Archive -Path (Join-Path $d '*') -DestinationPath '%BUNDLE_ZIP%' -CompressionLevel Optimal }"
 if errorlevel 1 (
   echo ERROR: Submission bundle creation failed.
   exit /b 1
@@ -107,7 +111,7 @@ for %%F in ("%BUNDLE_ZIP%") do set "BUNDLE_SIZE=%%~zF"
 echo.
 echo COMPLETE. Upload this single file:
 echo   %BUNDLE_ZIP% (%BUNDLE_SIZE% bytes)
-echo It contains audit, provenance, reward gate, metrics, per-example results, manifests, logs, config, and SHA256SUMS.json.
+echo It contains checkpoints, prepared inputs, audit, provenance, metrics, manifests, logs, config, and SHA256SUMS.json.
 exit /b 0
 
 :step
