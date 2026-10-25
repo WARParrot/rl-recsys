@@ -220,7 +220,7 @@ def _validate_options(seeds, steps, repeat_penalty):
 
 
 def run_followup(data_dir, run_dir, output, seeds=(42, 43, 44), steps=1000, repeat_penalty=.1, *, training_only=False,
-                 include_repeat_sensitivity=False, source_mode="current"):
+                 include_repeat_sensitivity=False, source_mode="current", reward_objective="joint"):
     """Train fresh follow-up artifacts only; requires CUDA and a fresh output path.
 
     Parent ``reanalysis.verify_inputs(run, data)`` authenticates imported inputs.
@@ -229,6 +229,8 @@ def run_followup(data_dir, run_dir, output, seeds=(42, 43, 44), steps=1000, repe
     Returns the follow-up manifest, including per-seed gate failures (no RL).
     """
     seeds = _validate_options(seeds, steps, repeat_penalty)
+    if reward_objective not in {"joint", "completion"}:
+        raise ValueError("reward_objective must be joint or completion")
     data_dir, run, output = Path(data_dir), Path(run_dir), Path(output)
     if output.exists():
         raise FileExistsError("Follow-up requires a fresh output directory")
@@ -241,7 +243,10 @@ def run_followup(data_dir, run_dir, output, seeds=(42, 43, 44), steps=1000, repe
     from .reanalysis import verify_inputs
     imported_manifest = verify_inputs(run, data_dir, training_only=True) if training_only else verify_inputs(run, data_dir)
     cfg = copy.deepcopy(historical["config"])
-    cfg["train"].update(eval_every=50, rl_steps=steps, allow_cpu=False)
+    cfg["train"].update(eval_every=50, rl_steps=steps, allow_cpu=False,
+                        reward_objective=reward_objective)
+    if reward_objective == "completion":
+        cfg.setdefault("reward_audit", {})["min_relative_improvement"] = .02
     cfg["rl"].update(rewards=["completion"], horizons=[1], betas=[.01],
                      sampling_temperature=1., relevance_floor=.98)
     device = exp.get_device(cfg)
@@ -258,6 +263,11 @@ def run_followup(data_dir, run_dir, output, seeds=(42, 43, 44), steps=1000, repe
     provenance.update(historical_manifest=imported_manifest,
                       historical_provenance_sha256=sha256(run / "provenance.json"),
                       historical_sft_sha256=sha256(run / "sft.pt"),
+                      historical_source={"git_revision": historical.get("git_revision"),
+                                         "code_hashes": historical.get("code_hashes", {})},
+                      reward_objective=reward_objective,
+                      reward_checkpoint_selection="early user-macro completion MSE" if reward_objective == "completion" else "early user-macro joint two-head MSE",
+                      reward_architecture="unchanged two outputs; seconds untrained and inadmissible" if reward_objective == "completion" else "unchanged two trained outputs",
                       seeds=list(seeds), steps=steps, repeat_penalty=repeat_penalty,
                       parent_training_only=training_only, source_mode=source_mode,
                       experiment="A", lambda_ce_grid=[.1, 1.], rerank_weights=[0., .1, 1., 10.],
@@ -350,10 +360,13 @@ def main():
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--repeat-penalty", type=float, default=.1)
     parser.add_argument("--include-repeat-sensitivity", action="store_true")
+    parser.add_argument("--reward-objective", choices=["joint", "completion"], default="joint")
+    parser.add_argument("--training-only-parent", action="store_true")
     parser.add_argument("--source-mode", choices=["current", "historical_reanalysis"], default="current")
     args = parser.parse_args()
     run_followup(args.data_dir, args.run_dir, args.output, args.seeds, args.steps, args.repeat_penalty,
-                 include_repeat_sensitivity=args.include_repeat_sensitivity, source_mode=args.source_mode)
+                 include_repeat_sensitivity=args.include_repeat_sensitivity, source_mode=args.source_mode,
+                 training_only=args.training_only_parent, reward_objective=args.reward_objective)
 
 
 if __name__ == "__main__":

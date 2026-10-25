@@ -138,7 +138,8 @@ def test_deadline_stops_local_loop_before_optimizer(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp_path, enabled):
+@pytest.mark.parametrize("objective", ["joint", "completion"])
+def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp_path, enabled, objective):
     run, data_dir, output = [tmp_path / name for name in ["historical", "data", "fresh"]]
     run.mkdir()
     data_dir.mkdir()
@@ -171,6 +172,7 @@ def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp
     fits = []
     def fit(model, fit, valid, steps, path, c, *a, **kw):
         assert c["train"]["eval_every"] == 50
+        assert c["train"]["reward_objective"] == objective
         assert valid["timestamp"].max() == 2
         fits.append(path.name)
         fu.exp.checkpoint(path, model)
@@ -199,7 +201,8 @@ def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp
         return {"optimizer_steps": steps, "selected_checkpoint": f"{name}.pt"}
     monkeypatch.setattr(fu, "train_policy", train)
     monkeypatch.setattr(fu, "tune_rerank", lambda *a: {"selected": None, "candidates": []})
-    manifest = fu.run_followup(data_dir, run, output, seeds=(42, 43), steps=3, repeat_penalty=.25)
+    manifest = fu.run_followup(data_dir, run, output, seeds=(42, 43), steps=3, repeat_penalty=.25,
+                               reward_objective=objective)
     assert verify_calls == [(run, data_dir)]
     assert roles == ["fit", "calibration", "selection"]
     assert fits == ["reward.pt", "item_only.pt"]  # one frozen RM across optimization seeds
@@ -213,6 +216,11 @@ def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp
     assert prov["historical_sft_sha256"] == fu.sha256(run / "sft.pt")
     assert prov["historical_manifest"] == {"verified": True}
     assert prov["seeds"] == [42, 43]
+    assert prov["reward_objective"] == objective
+    assert prov["historical_source"]["code_hashes"] == code_hashes
+    if objective == "completion":
+        assert prov["reward_checkpoint_selection"] == "early user-macro completion MSE"
+        assert prov["config"]["reward_audit"]["min_relative_improvement"] == .02
     assert "Conditional training-control" in prov["limitations"][0]
     assert prov["config"]["train"]["allow_cpu"] is False
     for seed in ["42", "43"]:

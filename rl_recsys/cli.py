@@ -55,6 +55,8 @@ def main(argv=None):
     q.add_argument("--steps", type=int, default=1000)
     q.add_argument("--repeat-penalty", type=float, default=.1)
     q.add_argument("--training-only-parent", action="store_true", help="Verify frozen training inputs without parent test artifacts")
+    q.add_argument("--source-mode", choices=["current", "historical_reanalysis"], default="current")
+    q.add_argument("--reward-objective", choices=["joint", "completion"], default="joint")
     q = sub.add_parser("evaluate-followup", help="Explicit exploratory inference of frozen follow-up controls")
     q.add_argument("--data", required=True)
     q.add_argument("--run", required=True)
@@ -62,6 +64,7 @@ def main(argv=None):
     q.add_argument("--output", required=True)
     q.add_argument("--batch-size", type=int, default=128)
     q.add_argument("--max-minutes", type=float, default=240)
+    q.add_argument("--source-mode", choices=["current", "historical_reanalysis"], default="current")
     args = p.parse_args(argv)
     if args.command in {"import-run", "verify-run", "reanalyze", "bundle-reanalysis", "followup", "evaluate-followup"}:
         from . import reanalysis
@@ -78,10 +81,15 @@ def main(argv=None):
         elif args.command == "evaluate-followup":
             from .followup_evaluate import evaluate_followup
             result = evaluate_followup(args.data, args.run, args.followup, args.output,
-                                       batch_size=args.batch_size, max_minutes=args.max_minutes)
+                                       batch_size=args.batch_size, max_minutes=args.max_minutes,
+                                       source_mode=args.source_mode)
         else:
             from .followup import run_followup
             options = {"training_only": True} if args.training_only_parent else {}
+            if args.source_mode != "current":
+                options["source_mode"] = args.source_mode
+            if args.reward_objective != "joint":
+                options["reward_objective"] = args.reward_objective
             result = run_followup(args.data, args.run, args.output, seeds=args.seeds,
                                   steps=args.steps, repeat_penalty=args.repeat_penalty, **options)
         print(json.dumps(result, indent=2))

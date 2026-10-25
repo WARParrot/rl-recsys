@@ -149,6 +149,20 @@ def check_deadline(deadline, label):
         raise TimeoutError(f"Deadline reached during {label}")
 
 
+def reward_squared_error(prediction, completion, seconds, cfg):
+    """Per-event MSE; completion mode never reads the secondary label/output.
+
+    Keep the two-output architecture/checkpoint schema for historical restoration.
+    The untrained seconds output is NOT a usable reward in completion mode.
+    """
+    objective = cfg.get("train", {}).get("reward_objective", "joint")
+    if objective == "completion":
+        return (prediction[:, 0] - completion).square()
+    if objective != "joint":
+        raise ValueError("reward_objective must be joint or completion")
+    return (prediction - torch.stack([completion, seconds], -1)).square().mean(-1)
+
+
 @torch.no_grad()
 def validation_loss(model, subset, cfg, device, reward=False, deadline=None):
     model.eval()
@@ -159,8 +173,9 @@ def validation_loss(model, subset, cfg, device, reward=False, deadline=None):
         ctx = torch.as_tensor(subset["context"][start:end], device=device)
         target = torch.as_tensor(subset["target"][start:end], device=device)
         if reward:
-            y = torch.as_tensor(np.column_stack([subset["reward"][start:end], subset["seconds"][start:end]]), device=device)
-            loss = ((model(ctx, target) - y) ** 2).mean(-1)
+            completion = torch.as_tensor(subset["reward"][start:end], device=device)
+            seconds = torch.as_tensor(subset["seconds"][start:end], device=device)
+            loss = reward_squared_error(model(ctx, target), completion, seconds, cfg)
         else:
             loss = F.cross_entropy(model(ctx), target - 2, reduction="none")
         losses.extend(loss.cpu().tolist())
@@ -181,16 +196,16 @@ def fit_supervised(model, fit, valid, steps, path, cfg, device, deadline, reward
         model.train()
         b = sample(cfg["train"]["batch_size"], rng, device)
         if reward:
-            y = torch.stack([b["reward"], b["seconds"]], -1)
-            loss = F.mse_loss(model(b["context"], b["target"]), y)
+            loss = reward_squared_error(model(b["context"], b["target"]),
+                                        b["reward"], b["seconds"], cfg).mean()
         else:
             loss = F.cross_entropy(model(b["context"]), b["target"] - 2)
         norm = optimize_step(loss, model, optimizer, cfg)
         if (step + 1) % progress_every == 0 or step + 1 == steps:
-            progress_record(progress_path, phase, step + 1, steps, start, loss=float(loss), grad_norm=norm)
+            progress_record(progress_path, phase, step + 1, steps, start, loss=float(loss.detach()), grad_norm=norm)
         if (step + 1) % cfg["train"]["eval_every"] == 0 or step + 1 == steps:
             val = validation_loss(model, valid, cfg, device, reward, deadline)
-            record = {"step": step + 1, "loss": float(loss), "calibration_loss": val,
+            record = {"step": step + 1, "loss": float(loss.detach()), "calibration_loss": val,
                       "grad_norm": norm, "elapsed_seconds": time.monotonic() - start}
             print(json.dumps(record), flush=True)
             log.append(record)
@@ -275,6 +290,11 @@ def reward_gate(audit, cfg):
     decisions = {}
     for name, report in audit["heads"].items():
         relative = report["paired_mae"].get("relative_difference")
+        if cfg.get("train", {}).get("reward_objective", "joint") == "completion" and name != "completion":
+            decisions[name] = {"enabled": False, "relative_difference": relative,
+                               "min_relative_improvement": threshold,
+                               "reason": "untrained secondary output; not an admissible reward"}
+            continue
         passed = (relative is not None and relative < 0 and relative <= -threshold
                   and report.get("mae", 0) < report.get("constant_mae", float("inf")))
         decisions[name] = {"enabled": bool(passed),
@@ -451,6 +471,8 @@ def reward_report(rm, auditor, fit, test, cfg, device, data=None, deadline=None)
                   "paired_mae": paired_interval(baseline_error, error, test["uid"], cfg["evaluation"]["bootstrap"],
                                                cfg["evaluation"]["bootstrap_seed"]),
                   "calibration": [], "slices": {}}
+        report["trained_output"] = head == 0 or cfg.get("train", {}).get("reward_objective", "joint") == "joint"
+        report["interpretation"] = "observed-label predictive diagnostic" if report["trained_output"] else "UNTRAINED secondary output; not a seconds predictor or admissible reward"
         report["rmse_definition"] = "sqrt(user-macro MSE); sqrt applied after user averaging in every bootstrap replicate"
         comparators = {"constant": np.full(len(y), mean),
                        "item_mean": item_mean[test["target"]],

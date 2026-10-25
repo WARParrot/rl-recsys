@@ -27,6 +27,10 @@ run_windows.bat reanalyze "C:\\path\\to\\uploaded-files"
 
 Каталог должен содержать ZIP, `prepared.npz` и все девять `.pt`. Команда не обучает модели; результат — `runs\\reanalysis-seed42\\reanalysis-complete.zip`, включая веса и подготовленные данные. Нужен запас диска на исходники, копии и ZIP. Подробные команды, ограничения и opt-in новые обучающие контроли: **[REANALYSIS.md](REANALYSIS.md)**.
 
+### Срочный completion-only follow-up (после возвращённого research-run)
+
+Для повторного использования **исходных prepared data и SFT без их переобучения**: `run_completion_windows.bat "C:\path\to\research-20261025-150300-430"`. Это отдельный новый completion-only MSE reward experiment; исторический joint RM заморожен, gate не ослабляется, при его неудаче остаётся continued-SFT. Новый run/test — **exploratory_reuse**, не продолжение численных pilot-таблиц ниже. [Точная команда, входы, бюджеты, архивы и ограничения](COMPLETION_FOLLOWUP.md).
+
 ## Содержание
 
 1. [Исследовательский вопрос и гипотезы](#1-исследовательский-вопрос-и-гипотезы)
