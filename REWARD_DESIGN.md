@@ -1,8 +1,10 @@
 # Reward design and one-launch Experiment A
 
+**Submission status:** Experiment A is implemented and tested, but this repository does not claim a completed research-suite result. The executed results are the historical joint-RM pilot and the separate completion-only follow-up; see [RESULTS.md](RESULTS.md) and [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).
+
 ## Implemented default (stage4)
 
-`run_windows.bat` (or `run_research_windows.bat`) now launches **Experiment A**, not the historical full reward/horizon grid or a repeat-penalty experiment. See [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md) for the scientific contract. No new research results are claimed here.
+`run_windows.bat` (or `run_research_windows.bat`) launches the implemented Experiment A workflow, not the historical full reward/horizon grid or a repeat-penalty experiment. No completed research-suite results are claimed in this repository; the executed pilot/follow-up results are linked above. See [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md) for the scientific contract.
 
 For one prepared sample/catalog/split, the suite trains **one SFT**, then **one history-aware completion RM** and one learned item-only diagnostic comparator. Early calibration selects supervised checkpoints; late calibration audits reward. The RM checkpoints are reused byte-for-byte for policy optimization seeds **42/43/44**. SFT/RM initialization uses the config seed (default 42); sampling has a separate `sample_seed` (default config seed).
 

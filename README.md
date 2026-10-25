@@ -2,6 +2,8 @@
 
 **Главный результат:** в проведённом эксперименте RL немного увеличил оценку обученной модели вознаграждения, но не дал практически значимого преимущества над исходной моделью и простым переранжированием. Для выбранной политики прирост ожидаемого proxy составил **0,0763%**, а изменение NDCG@10 на доступных целевых объектах — **−1,06%**. Сохранение релевантности в пределах заданного допуска статистически не установлено.
 
+**Полный архив для проверки:** [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing). Архив содержит исторический pilot bundle и checkpoints/prepared data, reanalysis assets, research-suite/completion-follow-up artifacts и SHA-256 manifests. Большие assets не входят в компактный Git excerpt.
+
 Это **отрицательный исследовательский результат**, а не доказательство бесполезности RL в рекомендациях вообще. Ни удовлетворённость, ни удержание, ни причинное влияние рекомендаций на пользователей здесь не измерялись.
 
 Этот README — **основной исследовательский отчёт и точка входа в решение**. Основные policy-таблицы относятся к историческому обучению ниже; новые inference-диагностики (§5.5) выполнены на тех же замороженных весах кодом `e3cf359`:
@@ -13,11 +15,21 @@
 
 Код, конфигурация и инструкции находятся в этом репозитории; метрики и журналы — в связанном релизе. Старые запуски в [REPORT.md](REPORT.md) оставлены как историческое приложение и **не заменяют результаты этого README**. Краткая англоязычная сводка последнего запуска: [RESULTS.md](RESULTS.md).
 
+### Статус запусков
+
+| Запуск | Фактический статус |
+|---|---|
+| Historical joint-RM pilot | SFT, joint completion/seconds RM и completion-RL policy arms обучены и оценены; seconds-RL был отключён gate. Это основной работающий RL-эксперимент задания. |
+| Research-suite / Experiment A | Реализован и протестирован, но завершённый результат этого suite в репозитории не заявляется. Не смешивать его prospective arms с историческими числами. |
+| Completion-only follow-up | Новая RM не прошла late gate; обучены только continued-SFT controls. RL, RL+CE и reranking не обучались. См. [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md). |
+
 ## Улучшения после независимого аудита
 
 Добавлены отдельный inference-only workflow, полный экспорт входов/весов, проверка eligible-метрик по настоящим targets, tuned-rerank, history-sensitivity и matched append-контроли. Исторические manifests не переписываются. Предоставленные checkpoints и `prepared.npz` сверены по SHA-256; локально повторно восстановлены исторические ranking-метрики и eligible-интервалы. **GPU reanalysis выполнен и проверен:** все 12 completion-hashes совпадают, входы совпадают с историческими, ranking-массивы всех десяти политик восстановлены по targets. Код анализа — `e3cf359`; время inference — **155,75 с**, peak allocated CUDA — **535,5 MiB** (не полный VRAM процесса). Нового обучения не было. [Компактные результаты, plots и независимый разбор](evidence/reanalysis-e3cf359/README.md).
 
-**Новый полный запуск на Windows:** `run_windows.bat` без аргументов теперь запускает research-suite: Experiment A на одной фиксированной выборке/SFT/RM, optimization seeds 42/43/44, late-calibration audit, learned item-only comparator, continued-SFT, RL, RL+CE и selection-tuned rerank; полный ZIP64. Это conditional optimization variability, не три full-pipeline seeds; ensemble не обучается. Stage5: отдельный opt-in [ensemble audit](ENSEMBLE_AUDIT.md) проверяет явно экспортированные observed-label NPZ, но не обучает B и не запускается default suite. Это новое обучение, потенциально несколько дней, не inference. [Порядок, ограничения и результаты обсуждения reward](REWARD_DESIGN.md). Старый single pilot: `run_windows.bat pilot`.
+**Новый полный запуск на Windows:** `run_windows.bat` без аргументов запускает реализованный research-suite / Experiment A: optimization seeds 42/43/44, late-calibration audit, item-only comparator, continued-SFT, RL, RL+CE и selection-tuned rerank; полный ZIP64. **Завершённый результат этого suite в репозитории не заявляется.** Это prospective implementation, а не новые численные данные ниже. Старый single pilot: `run_windows.bat pilot`.
+
+Здесь conditional optimization variability, не три full-pipeline seeds; ensemble не обучается. Stage5 — отдельный opt-in observed-label ensemble audit, не B training. Подробности реализации и ограничения: [REWARD_DESIGN.md](REWARD_DESIGN.md).
 
 На Windows для **inference-only** используйте:
 
@@ -27,13 +39,17 @@ run_windows.bat reanalyze "C:\\path\\to\\uploaded-files"
 
 Каталог должен содержать ZIP, `prepared.npz` и все девять `.pt`. Команда не обучает модели; результат — `runs\\reanalysis-seed42\\reanalysis-complete.zip`, включая веса и подготовленные данные. Нужен запас диска на исходники, копии и ZIP. Подробные команды, ограничения и opt-in новые обучающие контроли: **[REANALYSIS.md](REANALYSIS.md)**.
 
-### Срочный completion-only follow-up (после возвращённого research-run)
+### Completion-only follow-up (протокол и результат)
 
-Для повторного использования **исходных prepared data и SFT без их переобучения**: `run_completion_windows.bat "C:\path\to\research-20261025-150300-430"`. Это отдельный новый completion-only MSE reward experiment; исторический joint RM заморожен, gate не ослабляется, при его неудаче остаётся continued-SFT. Новый run/test — **exploratory_reuse**, не продолжение численных pilot-таблиц ниже. [Точная команда, входы, бюджеты, архивы и ограничения](COMPLETION_FOLLOWUP.md).
+Для повторного использования **исходных prepared data и SFT без их переобучения**: `run_completion_windows.bat "C:\path\to\research-20261025-150300-430"`. Это отдельный exploratory follow-up; он уже выполнен и описан в [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md). Исторический joint RM заморожен, gate не ослабляется. При failed gate остаются только continued-SFT controls; результат не добавляется к историческим policy-таблицам как сопоставимый RL-run.
 
-### Срочный completion-only follow-up (результат)
+
+
+### Completion-only follow-up (результат)
 
 [Отдельный отчёт](COMPLETION_RESULTS.md) дополняет исследование новым отрицательным запуском; исторические policy-таблицы и основной README-отчёт не переписаны. Completion-only RM не прошла поздний gate (MAE 0,349361 vs item-mean 0,348721; +0,183%, CI [−2,794%; +3,064%]); поэтому RL/RL+CE/rerank arms не обучались. Запуск завершился тремя continued-SFT controls, чьи eligible-NDCG intervals включают ноль. ZIP и все 109 внутренних checksums проверены. Test и audit уже использовались; результат exploratory reuse, не независимое подтверждение.
+
+Полный архив для проверки: [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing).
 
 
 1. [Исследовательский вопрос и гипотезы](#1-исследовательский-вопрос-и-гипотезы)
@@ -43,7 +59,7 @@ run_windows.bat reanalyze "C:\\path\\to\\uploaded-files"
 5. [Результаты](#5-результаты)
 6. [Объяснение наблюдений](#6-объяснение-наблюдений)
 7. [Долгосрочные цели](#7-долгосрочные-цели)
-8. [Ограничения и следующий эксперимент](#8-ограничения-и-следующий-эксперимент)
+8. [Ограничения и оставшиеся направления](#8-ограничения-и-оставшиеся-направления)
 9. [Воспроизведение](#9-воспроизведение)
 10. [Источники и границы применимости](#10-источники-и-границы-применимости)
 
@@ -307,7 +323,7 @@ $$
 | Малый прирост proxy при близости к SFT | KL может ограничивать дрейф; слабый/малополезный reward-сигнал также возможен | Траектории loss/KL/relevance на фиксированных контекстах; контроль continued-SFT |
 | Низкий β и H=5 дают худшую relevance и более высокий HHI | Более сильный дрейф связан с нежелательным trade-off | Сопоставимые по compute прогоны и несколько seeds; не только сравнение крайних точек |
 | RM-score растёт даже при random/popularity append; observed replay ниже | Синтетическая история связана с ростом proxy, эффект не специфичен для RL | Контроли выполнены (§5.5); нужны consecutive/time-matched transitions и repetitions |
-| Cross-user shuffle ухудшает completion MAE на 7,04%, но RM лишь неуверенно лучше item mean | У этой RM есть полезная contextual association; превосходство нового history-aware метода не установлено | Перестановка выполнена (§5.5); остаются trained item-only RM и отдельный audit-период |
+| Cross-user shuffle ухудшает completion MAE на 7,04%, а completion-only follow-up отдельно обучил item-only comparator | У fitted RM есть contextual association, но превосходство history-aware RM над item-only зависит от метрики и audit-периода | История-чувствительность выполнена (§5.5); late-аудит joint/completion-only и trained item-only описаны в [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md); свежий audit остаётся будущим |
 | Reranking лучше выбранной RL по двум точечным метрикам | Для этого запуска сложность RL не окупилась | Настройка веса rerank на selection, парные сравнения и бюджет вычислений |
 
 **Reward hacking не доказан.** Работы о misspecified reward и overoptimization показывают, как рост proxy может сопровождаться падением истинной цели [8, 9], но здесь нет истинной пользовательской награды. Аудитор хуже item mean по точечной MAE и разделяет наблюдательные смещения RM; его нельзя считать «gold reward».
@@ -332,7 +348,7 @@ $$
 
 Офлайн можно проверить предсказуемость/калибровку этих labels и чувствительность reward–relevance trade-off. Причинный тезис «рекомендация увеличила удержание» потребует отдельного идентифицирующего дизайна; практический следующий этап — пользовательский randomized online test с метриками retention, relevance, повторов и разнообразия. **В текущей работе retention-head не обучалась.**
 
-## 8. Ограничения и следующий эксперимент
+## 8. Ограничения и оставшиеся направления
 
 1. Один seed. Bootstrap пользователей не заменяет повторное обучение.
 2. Test уже изучался; новые утверждения на нём остаются разведочными.
@@ -341,19 +357,13 @@ $$
 5. Ограниченный каталог: почти половина сохранённых targets недоступна политике.
 6. Исключение timestamp ties и подсэмплирование событий ограничивают переносимость выводов.
 7. Нет acceptance/rejection/ухода в симуляторе. Observed/random/popularity-контроли выполнены, но observed replay gapped, не consecutive/time-matched.
-8. Rerank-вес настроен на selection; continued-SFT и альтернативный reward реализованы как opt-in training, но ещё не выполнены.
-9. Веса и prepared data предоставлены для ревью, targets/eligibility восстановлены, новый inference выполнен на исходной машине. В Git хранится компактный excerpt, не все большие assets; публичная независимая воспроизводимость ещё требует их доступной публикации.
+8. Prospective Experiment A реализован, однако завершённый result suite в репозитории не заявляется; completion-only follow-up остановился до RL по reward-gate.
+9. Веса и prepared data предоставлены для ревью, targets/eligibility восстановлены, новый inference выполнен на исходной машине. Полный reviewer bundle доступен в [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing); Git хранит код и компактные excerpts, а не все большие assets.
 10. Нет измерения удовлетворённости, реального времени прослушивания или причинного user impact.
 
-**Следующий эксперимент — не расширение RL-сетки любой ценой:**
+**Оставшиеся направления, не требуемые для закрытия задания:** свежий незатронутый временной test, genuinely independent full-pipeline repetitions, consecutive/time-matched observed transitions, Experiment B с обучением и аудитом ensemble RM, retention labels и онлайн-эксперимент. Эти направления не запускались в текущей работе.
 
-- Выполнить реализованный opt-in time-forward audit новых RM и trained item-only контроль. Shuffled-history diagnostic уже выполнен.
-- Улучшить выполненные append-контроли до consecutive/time-matched observed continuation и повторить stochastic trajectories.
-- Выполнить реализованный continued-SFT и alternative-reward H=1 follow-up на нескольких conditional seeds; selection-tuned rerank уже выполнен. Это не full-pipeline seed robustness.
-- Один интерпретируемый альтернативный reward, например completion со штрафом за повтор, только после проверки его компонентов. Не запускать seconds-RL лишь ради второй функции, если RM для seconds хуже простого baseline.
-- Более поздний неиспользованный период и выпуск targets/масок/checkpoints для независимой оценки.
-
-**Вывод:** H1 и H2 не поддержаны; для H3 есть диагностическое расхождение средних оценок, но механизм не установлен. Практического преимущества RL над SFT/переранжированием в этом запуске нет. Выкатывать модель на основании этих результатов не обосновано.
+**Вывод:** исторический joint-RM pilot закрывает обязательную рабочую цепочку задания и даёт отрицательный RL-результат. H1 и H2 не поддержаны; для H3 есть диагностическое расхождение средних оценок, но механизм не установлен. Completion-only follow-up не показал, что удаление seconds-loss исправляет reward-gate; он не тестировал RL+CE. Выкатывать модель на основании этих результатов не обосновано.
 
 ## 9. Воспроизведение
 
@@ -458,4 +468,4 @@ print(f'Проверены {len(manifest)} файлов и completion-маниф
 17. **Kaplan, Meier (1958), “Nonparametric Estimation from Incomplete Observations”.** [DOI:10.1080/01621459.1958.10501452](https://doi.org/10.1080/01621459.1958.10501452). Основание обработки неполных наблюдений; не решает confounding и не идентифицирует эффект рекомендаций.
 18. **Petrov, Macdonald (2024), “Aligning GPTRec with Beyond-Accuracy Goals with Reinforcement Learning”.** [arXiv:2403.04875](https://arxiv.org/abs/2403.04875). Близкий прецедент RL-настройки генеративных рекомендаций под вторичные цели; другие данные/цели, не внешняя валидация наших результатов.
 
-**Итог исследования:** реализованы GPT-2 next-item baseline, история-зависимая RM и RL-дообучение с общим временным протоколом оценки. Практически значимый выигрыш не получен. Главный следующий шаг — проверить полезность истории в RM и реализм многошагового продолжения, а не принимать рост предсказанного вознаграждения за улучшение рекомендаций.
+**Итог исследования:** реализованы GPT-2 next-item baseline, история-зависимая RM и RL-дообучение с общим временным протоколом оценки. Исторический joint-RM pilot дал отрицательный практический результат; completion-only follow-up не прошёл reward-gate до RL. Результаты не поддерживают user-impact claims. Prospective Experiment A и Experiment B остаются реализованными/описанными направлениями без заявленного завершённого результата; свежий temporal audit остаётся будущей задачей.

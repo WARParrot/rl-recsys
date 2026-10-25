@@ -1,8 +1,10 @@
-# Историческое приложение: Yambda-50M pilot
+# Superseded Pilot 1 — historical appendix
+
+> This file is retained for provenance and historical detail. Its old pilot tables are **not** the final summary and must not be mixed with the prospective Experiment A contract or completion-only follow-up. The core assignment result is the executed joint-RM pilot described here; the full reviewer archive is available in the [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing).
 
 > **Основной актуальный отчёт — [README.md](README.md).** Разделы 1–8 ниже описывают старый запуск и сохраняются для истории. Раздел 9 содержит последующее объяснение нового запуска; актуальные выводы, источники, метрики и инструкции объединены в README. Старые численные таблицы и замечания о source-byte identity не относятся к релизу v0.2.0-pilot-2.
 
-**Статус:** исторический restricted pilot; это не доказательство causal/user impact. Текущий код обновлён после аудита: [protocol amendment](RESEARCH_UPGRADE.md). Нового GPU-эксперимента по обновлённому протоколу пока нет; таблицы ниже не пересчитаны.
+**Статус:** historical joint-RM restricted pilot; это не доказательство causal/user impact. Проспективный research-suite реализован, но его завершённый результат здесь не заявляется. Completion-only follow-up выполнен отдельно и описан в [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).
 
 **Provenance qualification:** metadata hashes agree internally, but the supplied run's source-code hashes could not be reconstructed from the recorded Git revision/current checkout, including line-ending checks. Exact source-byte identity remains unverified. Do not treat the revision label alone as proof of the executed source.
 
@@ -134,19 +136,20 @@ Five-step synthetic contexts produce higher reward-model scores but not higher a
 8. One sampled action per context is used. The paired user bootstrap is conditional on that Monte Carlo draw and checkpoint, not a complete estimate of sampling/training uncertainty.
 9. The test has been inspected in earlier pilots; this rerun is not a fresh untouched confirmatory dataset. Its intervals are descriptive, and a materially revised hypothesis needs a new frozen evaluation period.
 
-## 8. Recommendation and next experiment
+## 8. Recommendation and remaining historical context
 
 Do not claim that RL improved recommendations or user satisfaction. Treat this pilot as a negative/diagnostic result: under this reward, simulator and KL settings, model-based RL did not produce a practically meaningful gain over SFT or reranking.
 
-The next experiment should be materially different rather than another seed of the same setup:
+The historical pilot recommended the following directions before the later completion-only follow-up; they are retained as context, not open requirements for this submission:
 
-1. retain the separated Windows stdout/stderr and add a process exit/status manifest;
+1. retain separated Windows stdout/stderr and add process exit/status manifests;
 2. use a strict independent reward-audit split and quantify OOD coverage of recommended actions;
-3. add exposure-aware logged evaluation if propensities/candidate impressions are available, or explicitly restrict claims to conditional predictive ranking;
+3. add exposure-aware logged evaluation if propensities/candidate impressions become available;
 4. compare RL and reward reranking under the same reward budget and candidate universe;
-5. add explicit context-drift and reward-model disagreement penalties for H=5;
-6. run additional seeds only after the revised protocol has a predeclared success criterion.
+5. add explicit context-drift and reward-model disagreement diagnostics for H=5;
+6. run additional seeds only with a predeclared success criterion.
 
+The completion-only follow-up has now supplied the reward-variant result described in [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md). The remaining items are prospective extensions, not blockers for documenting the historical pilot.
 ### Long-term objectives: proposed, not measured in this pilot
 
 A future reward could combine immediate completion with a separate history-conditioned continuation/return head: e.g. another listen within a declared session gap and return during a fixed 7-day horizon, with penalties for repetition/concentration. Timestamp units and the dataset's observation horizon must first be validated. Labels need an adequate future observation window; right-censored examples must be excluded or modeled explicitly, and temporal training/evaluation boundaries must be purged by the label horizon to prevent leakage. No such retention head was trained here.

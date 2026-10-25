@@ -1,6 +1,8 @@
 # Completion-only follow-up: результат
 
-**Статус:** exploratory reuse, отрицательный результат; это отдельный follow-up, не новая независимая проверка.
+**Full completion archive for reviewers:** [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing).
+
+**Submission status:** exploratory reuse, negative result; this is a separate follow-up, not a new independent check.
 
 Артефакт: `completion-20261025-203706-879.zip`
 SHA-256: `1de1edd6d02f4f8692268234f5f1269e3056ab011c3f3c4ee922cfb745949071`

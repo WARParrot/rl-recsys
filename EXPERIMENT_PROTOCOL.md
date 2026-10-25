@@ -1,6 +1,6 @@
 # Experiment contract: next research run
 
-**Status: Experiment A core and stage4 suite implemented; no new training results.** This contract does not change historical runs. [REWARD_DESIGN.md](REWARD_DESIGN.md) documents shipped commands, artifacts and limitations. Experiment B training remains prospective and unimplemented; stage5 adds only opt-in observed-label ensemble hypothesis validation ([ENSEMBLE_AUDIT.md](ENSEMBLE_AUDIT.md)). No training is authorized by this document alone.
+**Status: implemented prospective Experiment A contract; no completed Experiment A research-suite result is claimed.** The executed evidence is the historical joint-RM pilot plus the separate completion-only follow-up. This contract does not change historical runs. [REWARD_DESIGN.md](REWARD_DESIGN.md) documents shipped commands, artifacts and limitations. Experiment B training remains prospective and unimplemented; stage5 adds only opt-in observed-label ensemble hypothesis validation ([ENSEMBLE_AUDIT.md](ENSEMBLE_AUDIT.md)). No training is authorized by this document alone.
 
 ## 1. Primary estimand and claim boundary
 
