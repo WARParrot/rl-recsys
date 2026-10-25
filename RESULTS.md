@@ -71,3 +71,14 @@ The declared H2 threshold was a 5% reward improvement with an eligible-NDCG non-
 - No causal user-satisfaction, retention, or product-impact claim is supported.
 
 The release asset is the authoritative machine-readable artifact for this run. The report should not treat these numbers as a fresh preregistered result or as evidence of causal recommendation improvement.
+
+## Completion-only follow-up (2026-10-25)
+
+A separate completion-only reward experiment reused the full prepared data and SFT from the later research suite. It is **not** part of the historical pilot table above. Full results and protocol are in [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).
+
+- All **109** internal artifact checksums in `completion-20261025-203706-879.zip` were verified; archive SHA-256 is `1de1edd6d02f4f8692268234f5f1269e3056ab011c3f3c4ee922cfb745949071`.
+- On the same late-calibration population (3,065 examples / 605 users), historical joint-RM completion MAE was **0.347538** versus item-mean **0.348721** (−0.339%; 95% paired-user interval [−3.379%, +2.720%]). Completion-only RM MAE was **0.349361** (+0.183%; interval [−2.794%, +3.064%]). Neither met the required −2% point-gain gate.
+- Accordingly, **no RL, RL+CE or reranking policy was trained** in this follow-up. The three continued-SFT controls changed eligible NDCG by +1.58%, +2.20% and +0.89%; all paired intervals include zero. These are exploratory reused-test estimates, not a demonstrated consistent improvement.
+- Completion-only checkpoint selection favored step 100 by early-calibration MSE; training loss later fell as calibration loss worsened. This is consistent with overfitting after the early checkpoint, not evidence that the selected checkpoint itself was chosen incorrectly.
+
+This is a negative result for the hypothesis that removing the auxiliary seconds objective would make the RM pass the existing gate. It does **not** test whether RL+CE works, since reward-dependent arms were correctly stopped. The test and audit periods were previously inspected; no causal, satisfaction or retention claim follows.

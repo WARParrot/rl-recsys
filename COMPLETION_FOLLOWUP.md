@@ -1,5 +1,7 @@
 # Completion-only follow-up: отдельный exploratory experiment
 
+**Фактические результаты доступны в [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).** Ниже оставлены исходные инструкции и протокол; запуск завершился штатно, но completion-only RM не прошла gate, поэтому RL-dependent policy arms не запускались.
+
 Это **новое обучение reward**, не повтор SFT и не новый независимый test. Основные численные таблицы README относятся к старому pilot и не являются результатами этого запуска.
 
 ## Запуск на Windows (cmd.exe)
@@ -33,6 +35,9 @@ run_completion_windows.bat "C:\path\to\research-20261025-150300-430"
 - RM бюджет наследуется из оригинального config (в возвращённом запуске 3000 обновлений), eval_every=50; исходный selected RM был step100, не final3000. Новый objective относится и к learned item-only.
 - Прежний point-gate: completion MAE минимум на **2%** лучше fit itemmean и лучше fit constant. CIs, RMSE, calibration/tails/slices остаются в audit. Gate не гарантирует точность контрфактической ожидаемой полезности. При неудаче не ослабляем threshold, не ищем новые настройки и не используем благоприятный test для обхода gate.
 - При failed gate выполняется только continued-SFT; при admitted gate — continued-SFT, completion H1 RL, RL+CE 0.1/1 и rerank grid 0/0.1/1/10. Beta=.01, T=1, 1000 обновлений на trained arm по умолчанию, seeds42/43/44 с **одним общим RM/SFT/data**. Это conditional optimization variability, не три независимых RM.
+- Фактический запуск: failed gate для всех reward-dependent arms, так что были обучены только continued-SFT controls. Подробная таблица и выводы: [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).
+- На reused test completion-only MAE=`0.343813` против item-mean `0.347756` (−1.134%; CI [−3.503%; +1.297%]); этот test score не используется для обхода gate.
+- На top10% predicted completion (509 events/231 users) event-mean prediction `.88499`, observed `.85703` (~2.80pp overprediction). Top1%: 51 events/34 users, insufficient support. Это только logged-target audit, не label качества непоказанных действий.
 - Все training/selection завершены до test. Selection floor и frozen reward одинаковы для arms; failed floor сохраняется как failure. Evaluation использует тот же новый completion-RM для всех новых политик. Абсолютные policy scores разных RM не следует сравнивать как независимую истину.
 
 ## Артефакты и передача

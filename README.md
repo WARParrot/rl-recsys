@@ -31,7 +31,10 @@ run_windows.bat reanalyze "C:\\path\\to\\uploaded-files"
 
 Для повторного использования **исходных prepared data и SFT без их переобучения**: `run_completion_windows.bat "C:\path\to\research-20261025-150300-430"`. Это отдельный новый completion-only MSE reward experiment; исторический joint RM заморожен, gate не ослабляется, при его неудаче остаётся continued-SFT. Новый run/test — **exploratory_reuse**, не продолжение численных pilot-таблиц ниже. [Точная команда, входы, бюджеты, архивы и ограничения](COMPLETION_FOLLOWUP.md).
 
-## Содержание
+### Срочный completion-only follow-up (результат)
+
+[Отдельный отчёт](COMPLETION_RESULTS.md) дополняет исследование новым отрицательным запуском; исторические policy-таблицы и основной README-отчёт не переписаны. Completion-only RM не прошла поздний gate (MAE 0,349361 vs item-mean 0,348721; +0,183%, CI [−2,794%; +3,064%]); поэтому RL/RL+CE/rerank arms не обучались. Запуск завершился тремя continued-SFT controls, чьи eligible-NDCG intervals включают ноль. ZIP и все 109 внутренних checksums проверены. Test и audit уже использовались; результат exploratory reuse, не независимое подтверждение.
+
 
 1. [Исследовательский вопрос и гипотезы](#1-исследовательский-вопрос-и-гипотезы)
 2. [Данные и временной протокол](#2-данные-и-временной-протокол)
