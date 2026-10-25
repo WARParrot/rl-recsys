@@ -53,6 +53,11 @@ def validate_config(config: Mapping) -> Mapping:
     if not isinstance(config, Mapping):
         raise ConfigValidationError("configuration must be an object")
 
+    if "sample_seed" in config:
+        value = config["sample_seed"]
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value < 2**32:
+            errors.append("sample_seed must be a nonnegative 32-bit integer")
+
     for path in ("train.sft_steps", "train.reward_steps", "train.rl_steps",
                  "train.batch_size", "evaluation.batch_size", "data.catalog_size", "evaluation.k"):
         _positive(config, path, errors)

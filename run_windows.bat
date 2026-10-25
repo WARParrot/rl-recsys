@@ -2,9 +2,15 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 set "PYTHONUTF8=1"
+if "%~1"=="" goto research
+if /I "%~1"=="research" goto research
 if /I "%~1"=="reanalyze" (
   call "%~dp0run_reanalysis_windows.bat" "%~2" "%~3"
   exit /b
+)
+if /I not "%~1"=="pilot" (
+  echo Usage: run_windows.bat [research [fresh-output-directory] ^| pilot ^| reanalyze assets-directory]
+  exit /b 2
 )
 set "VENV=%CD%\.venv"
 set "PYTHON_EXE="
@@ -113,6 +119,10 @@ echo COMPLETE. Upload this single file:
 echo   %BUNDLE_ZIP% (%BUNDLE_SIZE% bytes)
 echo It contains checkpoints, prepared inputs, audit, provenance, metrics, manifests, logs, config, and SHA256SUMS.json.
 exit /b 0
+
+:research
+call "%~dp0run_research_windows.bat" "%~2"
+exit /b %errorlevel%
 
 :step
 echo.

@@ -47,7 +47,8 @@ def frozen_followup(tmp_path, monkeypatch):
                 "historical_provenance_sha256": sha256(run / "provenance.json"),
                 "checkpoint_hashes": {"sft.pt": sha256(run / "sft.pt")}}
     # Historical authentication has its own suite; still bind these exact fixture bytes.
-    def verify(run_dir, data_dir):
+    def verify(run_dir, data_dir, **kwargs):
+        assert kwargs == {"training_only": True}
         assert run_dir == run and data_dir == prepared
         assert sha256(run / "sft.pt") == identity["checkpoint_hashes"]["sft.pt"]
         assert sha256(prepared / "prepared.npz") == identity["prepared_sha256"]
@@ -56,7 +57,8 @@ def frozen_followup(tmp_path, monkeypatch):
     monkeypatch.setattr(fe.exp, "get_device", lambda config: torch.device("cpu"))
     # Avoid installed-package/git inspection; real inference and checkpoint loading remain intact.
     monkeypatch.setattr(fe.exp, "provenance", lambda *a: {"fixture": "CPU inference", "config": cfg})
-    prov = {"config": cfg, "seeds": [42, 43],
+    prov = {"config": cfg, "seeds": [42, 43], "repeat_penalty": .1,
+            "code_hashes": {p.name: sha256(p) for p in Path(fe.exp.__file__).parent.glob('*.py')},
             "prepared_sha256": identity["prepared_sha256"],
             "historical_provenance_sha256": identity["historical_provenance_sha256"]}
     write_json(root / "provenance.json", prov)
@@ -89,6 +91,23 @@ def frozen_followup(tmp_path, monkeypatch):
     write_json(root / "followup_manifest.json", manifest)
     write_json(root / "FOLLOWUP_COMPLETE.json", {"status": "complete", "manifest_sha256": sha256(root / "followup_manifest.json"), "provenance_sha256": sha256(root / "provenance.json")})
     return prepared, run, root, tmp_path / "evaluated", data, manifest
+
+
+def test_source_mismatch_before_any_test_access(frozen_followup, monkeypatch):
+    prepared, run, root, out, _, manifest = frozen_followup
+    prov = json.loads((root / 'provenance.json').read_text())
+    prov['code_hashes']['followup.py'] = 'changed-source'
+    write_json(root / 'provenance.json', prov)
+    manifest['provenance_sha256'] = sha256(root / 'provenance.json')
+    write_json(root / 'followup_manifest.json', manifest)
+    write_json(root / 'FOLLOWUP_COMPLETE.json', {
+        'status': 'complete', 'manifest_sha256': sha256(root / 'followup_manifest.json'),
+        'provenance_sha256': sha256(root / 'provenance.json')})
+    monkeypatch.setattr(fe, 'load_prepared', lambda *a: pytest.fail('test data access'))
+    monkeypatch.setattr(fe, 'verify_inputs', lambda *a, **kw: pytest.fail('parent access'))
+    with pytest.raises(ValueError, match='Source code differs'):
+        fe.evaluate_followup(prepared, run, root, out)
+    assert not out.exists()
 
 
 def test_real_cpu_inference_selected_arms_masks_arrays_and_failed_seed(frozen_followup):

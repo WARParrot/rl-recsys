@@ -20,6 +20,7 @@ def main(argv=None):
     q.add_argument("--config", default="configs/pilot.json")
     q.add_argument("--data", default="data/prepared")
     q.add_argument("--run", required=True)
+    q.add_argument("--sft-only", action="store_true", help="Freeze only SFT for matched Experiment A")
     q = sub.add_parser("evaluate")
     q.add_argument("--data", default="data/prepared")
     q.add_argument("--run", required=True)
@@ -53,6 +54,7 @@ def main(argv=None):
     q.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
     q.add_argument("--steps", type=int, default=1000)
     q.add_argument("--repeat-penalty", type=float, default=.1)
+    q.add_argument("--training-only-parent", action="store_true", help="Verify frozen training inputs without parent test artifacts")
     q = sub.add_parser("evaluate-followup", help="Explicit exploratory inference of frozen follow-up controls")
     q.add_argument("--data", required=True)
     q.add_argument("--run", required=True)
@@ -79,8 +81,9 @@ def main(argv=None):
                                        batch_size=args.batch_size, max_minutes=args.max_minutes)
         else:
             from .followup import run_followup
+            options = {"training_only": True} if args.training_only_parent else {}
             result = run_followup(args.data, args.run, args.output, seeds=args.seeds,
-                                  steps=args.steps, repeat_penalty=args.repeat_penalty)
+                                  steps=args.steps, repeat_penalty=args.repeat_penalty, **options)
         print(json.dumps(result, indent=2))
         return
     if args.command == "evaluate":
@@ -93,7 +96,7 @@ def main(argv=None):
         result = download(cfg, args.output) if args.command == "download" else prepare(args.input, cfg, args.output)
         if result is not None: print(json.dumps(result, indent=2))
     elif args.command == "train":
-        train(cfg, args.data, args.run)
+        train(cfg, args.data, args.run, sft_only=True) if args.sft_only else train(cfg, args.data, args.run)
     elif args.command == "evaluate":
         print(json.dumps(final_evaluation(args.data, args.run), indent=2))
     else:

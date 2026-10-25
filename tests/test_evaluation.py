@@ -152,7 +152,9 @@ def test_both_reward_heads_have_independent_validation():
     assert result['heads']['completion']['mae'] != result['heads']['seconds']['mae']
     assert len(result['heads']['seconds']['calibration']) > 0
     assert set(result['heads']['seconds']['slices']) == {
-        'organic', 'recommended', 'duration_lt_180s', 'duration_180_to_300s', 'duration_ge_300s'}
+        'organic', 'recommended', 'repeat', 'novel',
+        'popularity_low', 'popularity_middle', 'popularity_high',
+        'duration_lt_180s', 'duration_180_to_300s', 'duration_ge_300s'}
 
 
 def test_reward_gate_disables_heads_that_do_not_beat_item_mean():

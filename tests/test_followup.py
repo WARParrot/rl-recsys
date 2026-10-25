@@ -4,6 +4,7 @@ import json
 import sys
 import time
 import types
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -142,7 +143,8 @@ def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp
     run.mkdir()
     data_dir.mkdir()
     cfg = small_config()
-    (run / "provenance.json").write_text(json.dumps({"config": cfg}))
+    code_hashes = {p.name: fu.exp.sha256(p) for p in Path(fu.exp.__file__).parent.glob('*.py')}
+    (run / "provenance.json").write_text(json.dumps({"config": cfg, "code_hashes": code_hashes}))
     (run / "sft.pt").write_bytes(b"historical sft")
     verify_calls = []
     def verify(r, d):
@@ -151,7 +153,7 @@ def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp
     monkeypatch.setitem(sys.modules, "rl_recsys.reanalysis", types.SimpleNamespace(verify_inputs=verify))
     monkeypatch.setattr(fu.exp, "get_device", lambda c: torch.device("cuda"))
     monkeypatch.setattr(fu.exp, "seed_all", lambda *a: None)
-    monkeypatch.setattr(fu.exp, "provenance", lambda root, c, *a: {"config": c, "code_hashes": {"followup.py": "mock"}})
+    monkeypatch.setattr(fu.exp, "provenance", lambda root, c, *a: {"config": c, "code_hashes": code_hashes})
     monkeypatch.setattr(fu, "load_prepared", lambda *a: {})
     roles = []
     def role(data, name, eligible=False):
@@ -196,16 +198,17 @@ def test_orchestration_gate_provenance_no_historical_rm_or_test(monkeypatch, tmp
         fu.exp.checkpoint(directory / f"{name}.pt", args[0])
         return {"optimizer_steps": steps, "selected_checkpoint": f"{name}.pt"}
     monkeypatch.setattr(fu, "train_policy", train)
+    monkeypatch.setattr(fu, "tune_rerank", lambda *a: {"selected": None, "candidates": []})
     manifest = fu.run_followup(data_dir, run, output, seeds=(42, 43), steps=3, repeat_penalty=.25)
     assert verify_calls == [(run, data_dir)]
     assert roles == ["fit", "calibration", "selection"]
-    assert fits == ["reward.pt", "item_only.pt"] * 2
-    assert len(arms) == (6 if enabled else 0)
+    assert fits == ["reward.pt", "item_only.pt"]  # one frozen RM across optimization seeds
+    assert len(arms) == (2 if not enabled else 8)
     if enabled:
-        assert arms[:3] == [("continued_sft", True, 0.), ("completion_h1", False, 0.),
-                            ("completion_minus_repeat_h1", False, .25)]
+        assert arms[:4] == [("continued_sft", True, 0.), ("completion_h1", False, 0.),
+                            ("completion_ce_0.1_h1", False, 0.), ("completion_ce_1_h1", False, 0.)]
     else:
-        assert not restored
+        assert len(restored) == 4 and set(restored) == {"sft.pt"}
     prov = json.loads((output / "provenance.json").read_text())
     assert prov["historical_sft_sha256"] == fu.sha256(run / "sft.pt")
     assert prov["historical_manifest"] == {"verified": True}
@@ -231,7 +234,8 @@ def test_invalid_options_fail_before_import_or_output(tmp_path, seeds, steps, pe
 def test_cuda_required_before_output_creation(monkeypatch, tmp_path):
     run = tmp_path / "run"
     run.mkdir()
-    (run / "provenance.json").write_text(json.dumps({"config": small_config()}))
+    (run / "provenance.json").write_text(json.dumps({"config": small_config(),
+        "code_hashes": {p.name: fu.exp.sha256(p) for p in Path(fu.exp.__file__).parent.glob('*.py')}}))
     monkeypatch.setitem(sys.modules, "rl_recsys.reanalysis", types.SimpleNamespace(verify_inputs=lambda *a: {}))
     monkeypatch.setattr(fu.exp, "get_device", lambda cfg: torch.device("cpu"))
     with pytest.raises(RuntimeError, match="requires CUDA"):

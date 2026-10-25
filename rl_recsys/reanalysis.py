@@ -46,11 +46,51 @@ def _manifest_name(name):
     return safe
 
 
-def verify_inputs(run_dir, data_dir):
-    """Verify complete historical inputs, including the bytes absent from old ZIPs."""
+def verify_inputs(run_dir, data_dir, *, training_only=False):
+    """Verify immutable inputs; training_only never accesses test artifacts.
+
+    The explicit training-only mode is for suite controls frozen before parent
+    test inference. Historical reanalysis keeps requiring completed evaluation.
+    """
     run, data = Path(run_dir), Path(data_dir)
-    ready = read_json(run / "READY_FOR_TEST.json")
     prov = read_json(run / "provenance.json")
+    ready_path = run / "READY_FOR_TEST.json"
+    if training_only and (run / "SFT_READY.json").exists():
+        ready = read_json(run / "SFT_READY.json")
+        for name in ["provenance", "training"]:
+            if sha256(run / f"{name}.json") != ready[f"{name}_sha256"]:
+                raise ValueError(f"SFT metadata hash mismatch: {name}")
+        if (sha256(data / "prepared.npz") != ready["prepared_sha256"]
+                or ready["prepared_sha256"] != prov["prepared_sha256"]
+                or sha256(data / "audit.json") != ready["prepared_audit_sha256"]
+                or ready["prepared_audit_sha256"] != prov["audit_sha256"]):
+            raise ValueError("Prepared input hash mismatch")
+        if set(ready["checkpoint_hashes"]) != {"sft.pt"} or sha256(run / "sft.pt") != ready["checkpoint_hashes"]["sft.pt"]:
+            raise ValueError("SFT checkpoint hash mismatch")
+        return {"status": "training inputs verified", "checkpoint_hashes": ready["checkpoint_hashes"],
+                "prepared_sha256": prov["prepared_sha256"],
+                "historical_provenance_sha256": sha256(run / "provenance.json"),
+                "historical_results_sha256": None, "historical_revision": prov.get("git_revision")}
+    if training_only and not ready_path.exists():
+        # A reward gate can stop training before READY_FOR_TEST is created.
+        # Verify immutable inputs/checkpoints without touching test artifacts.
+        for name in ["training", "reward_audit"]:
+            if not (run / f"{name}.json").exists():
+                raise ValueError(f"Missing training metadata: {name}")
+        if sha256(data / "prepared.npz") != prov["prepared_sha256"] or sha256(data / "audit.json") != prov["audit_sha256"]:
+            raise ValueError("Prepared input hash mismatch")
+        audit = read_json(run / "reward_audit.json")
+        if audit.get("provenance_sha256") != sha256(run / "provenance.json"):
+            raise ValueError("Training provenance hash mismatch")
+        hashes = audit.get("checkpoint_hashes", {})
+        for name in ["sft.pt", "reward.pt", "auditor.pt"]:
+            if name not in hashes or sha256(run / name) != hashes[name]:
+                raise ValueError(f"Training checkpoint hash mismatch: {name}")
+        return {"status": "training inputs verified", "checkpoint_hashes": hashes,
+                "prepared_sha256": prov["prepared_sha256"],
+                "historical_provenance_sha256": sha256(run / "provenance.json"),
+                "historical_results_sha256": None, "historical_revision": prov.get("git_revision")}
+    ready = read_json(ready_path)
     for name, digest in ready["checkpoint_hashes"].items():
         name = _manifest_name(name)
         if sha256(run / name) != digest:
@@ -69,11 +109,12 @@ def verify_inputs(run_dir, data_dir):
         raise ValueError("Selected checkpoint does not match selection")
     if selected_name and selected_name not in ready["checkpoint_hashes"]:
         raise ValueError("Selected checkpoint not bound to READY")
-    validate_evaluation_artifacts(run)
-    return {"status": "verified", "checkpoint_hashes": ready["checkpoint_hashes"],
+    if not training_only:
+        validate_evaluation_artifacts(run)
+    return {"status": "training inputs verified" if training_only else "verified", "checkpoint_hashes": ready["checkpoint_hashes"],
             "prepared_sha256": prov["prepared_sha256"],
             "historical_provenance_sha256": sha256(run / "provenance.json"),
-            "historical_results_sha256": sha256(run / "results.json"),
+            "historical_results_sha256": None if training_only else sha256(run / "results.json"),
             "historical_revision": prov.get("git_revision")}
 
 

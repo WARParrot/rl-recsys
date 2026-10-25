@@ -28,7 +28,7 @@ def macro(values, users):
     return float(means.mean()), means, unique
 
 
-def paired_interval(before, after, users, replicates=2000, seed=2026):
+def paired_interval(before, after, users, replicates=2000, seed=2026, *, root_mse=False):
     before = _validated_vector(before, "before")
     after = _validated_vector(after, "after")
     users = np.asarray(users)
@@ -38,19 +38,23 @@ def paired_interval(before, after, users, replicates=2000, seed=2026):
         raise ValueError("replicates must be a positive integer")
     _, a, u = macro(before, users)
     _, b, _ = macro(np.asarray(after), users)
+    if root_mse and ((before < 0).any() or (after < 0).any()):
+        raise ValueError("root_mse requires nonnegative squared errors")
+    transform = np.sqrt if root_mse else lambda x: x
+    av_point, bv_point = transform(a.mean()), transform(b.mean())
     rng = np.random.default_rng(seed)
     deltas = []
     relative = []
     for _ in range(replicates):
         idx = rng.integers(len(u), size=len(u))
-        av, bv = a[idx].mean(), b[idx].mean()
+        av, bv = transform(a[idx].mean()), transform(b[idx].mean())
         deltas.append(bv - av)
         relative.append((bv - av) / av if av else np.nan)
     finite = np.asarray(relative)[np.isfinite(relative)]
-    return {"users": len(u), "before": float(a.mean()), "after": float(b.mean()),
-            "difference": float((b - a).mean()),
+    return {"users": len(u), "before": float(av_point), "after": float(bv_point),
+            "difference": float(bv_point - av_point) if root_mse else float((b - a).mean()),
             "ci95": np.quantile(deltas, [.025, .975]).tolist(),
-            "relative_difference": float((b.mean() - a.mean()) / a.mean()) if a.mean() else None,
+            "relative_difference": float((bv_point - av_point) / av_point) if av_point else None,
             "relative_ci95": np.quantile(finite, [.025, .975]).tolist() if len(finite) else None,
             "uncertainty": "paired user bootstrap conditional on this seed/checkpoint; no seed uncertainty",
             "adequate_users": bool(len(u) >= 100)}

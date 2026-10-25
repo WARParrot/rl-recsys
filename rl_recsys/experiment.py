@@ -76,6 +76,13 @@ def batch(subset, size, rng, device):
     return {key: torch.as_tensor(value[idx], device=device) for key, value in subset.items()}
 
 
+def training_sampler(fit, cfg):
+    if cfg["train"].get("user_uniform", False):
+        from .followup import UserEventSampler
+        return UserEventSampler(fit).batch
+    return lambda size, rng, device: batch(fit, size, rng, device)
+
+
 def checkpoint(path, model):
     torch.save({k: v.detach().cpu() for k, v in model.state_dict().items()}, path)
 
@@ -167,11 +174,12 @@ def fit_supervised(model, fit, valid, steps, path, cfg, device, deadline, reward
     log = []
     start = time.monotonic()
     progress_every = cfg["train"].get("progress_every", cfg["train"]["eval_every"])
+    sample = training_sampler(fit, cfg)
     for step in range(steps):
         if timed_out(deadline):
             raise TimeoutError("Job deadline reached; final evaluation intentionally not run")
         model.train()
-        b = batch(fit, cfg["train"]["batch_size"], rng, device)
+        b = sample(cfg["train"]["batch_size"], rng, device)
         if reward:
             y = torch.stack([b["reward"], b["seconds"]], -1)
             loss = F.mse_loss(model(b["context"], b["target"]), y)
@@ -209,12 +217,13 @@ def train_rl(policy, reference, rm, fit, cfg, device, beta, horizon, reward_inde
     log = []
     start = time.monotonic()
     progress_every = cfg["train"].get("progress_every", cfg["train"]["eval_every"])
+    sample = training_sampler(fit, cfg)
     for step in range(cfg["train"]["rl_steps"]):
         if timed_out(deadline):
             raise TimeoutError("RL deadline reached")
         # Dropout off for matching sampling/logprob/KL policy distributions.
         policy.eval()
-        context = batch(fit, cfg["train"]["batch_size"], rng, device)["context"]
+        context = sample(cfg["train"]["batch_size"], rng, device)["context"]
         logprobs, rewards, kls = [], [], []
         for _ in range(horizon):
             logits = policy(context) / temperature
@@ -294,7 +303,7 @@ def select_candidate(candidates, base_summary, cfg):
     return max(eligible, key=objective) if eligible else None
 
 
-def train(config, data_dir, run_dir):
+def train(config, data_dir, run_dir, *, sft_only=False):
     cfg = validate_config(config)
     seed_all(cfg["seed"], cfg["train"]["threads"])
     device = get_device(cfg)
@@ -311,6 +320,11 @@ def train(config, data_dir, run_dir):
     fit, calibration, selection = [role(data, r, eligible=(r != "selection")) for r in ["fit", "calibration", "selection"]]
     if any(not len(x["target"]) for x in [fit, calibration, selection]):
         raise ValueError("Empty eligible split")
+    reward_audit_subset = calibration
+    independent_audit = cfg.get("reward_audit", {}).get("independent_calibration", False)
+    if independent_audit:
+        from .followup import split_calibration
+        calibration, reward_audit_subset = split_calibration(calibration)
     args = model_args(data, cfg)
     policy = Policy(*args).to(device)
     logs = {}
@@ -318,6 +332,16 @@ def train(config, data_dir, run_dir):
     progress_path.write_text("", encoding="utf-8")
     logs["sft"] = fit_supervised(policy, fit, calibration, cfg["train"]["sft_steps"], run / "sft.pt", cfg, device, deadline,
                                   progress_path=progress_path, phase="sft")
+    if sft_only:
+        dump(run / "training.json", logs)
+        dump(run / "SFT_READY.json", {
+            "status": "SFT complete; test unexamined",
+            "checkpoint_hashes": {"sft.pt": sha256(run / "sft.pt")},
+            "provenance_sha256": sha256(run / "provenance.json"),
+            "training_sha256": sha256(run / "training.json"),
+            "prepared_sha256": sha256(Path(data_dir) / "prepared.npz"),
+            "prepared_audit_sha256": sha256(Path(data_dir) / "audit.json")})
+        return
     rm = RewardModel(*args).to(device)
     logs["reward"] = fit_supervised(rm, fit, calibration, cfg["train"]["reward_steps"], run / "reward.pt", cfg, device, deadline, True,
                                     progress_path=progress_path, phase="reward")
@@ -326,9 +350,14 @@ def train(config, data_dir, run_dir):
     logs["auditor"] = fit_supervised(auditor, fit, calibration, cfg["train"]["reward_steps"], run / "auditor.pt", cfg, device, deadline, True,
                                       progress_path=progress_path, phase="auditor")
     # Calibration is time-forward from fit and is audited before any RL work.
-    reward_audit = reward_report(rm, auditor, fit, role(data, "calibration", True), cfg, device, data, deadline=deadline)
-    reward_audit["role"] = "calibration"
-    reward_audit["limitations"] = "Calibration also selects checkpoints; this is not an independent audit period."
+    reward_audit = reward_report(rm, auditor, fit, reward_audit_subset, cfg, device, data, deadline=deadline)
+    reward_audit["role"] = "late_calibration" if independent_audit else "calibration"
+    reward_audit["independent_of_checkpoint_selection"] = independent_audit
+    reward_audit["limitations"] = ("Late calibration is excluded from all supervised checkpoint selection; observational audit, not causal validation."
+                                   if independent_audit else "Calibration also selects checkpoints; this is not an independent audit period.")
+    if independent_audit:
+        reward_audit["temporal_roles"] = {"checkpoint_max_timestamp": int(calibration["timestamp"].max()),
+                                         "audit_min_timestamp": int(reward_audit_subset["timestamp"].min())}
     reward_audit["checkpoint_hashes"] = {name: sha256(run / name)
                                           for name in ["sft.pt", "reward.pt", "auditor.pt"]}
     reward_audit["provenance_sha256"] = sha256(run / "provenance.json")
@@ -400,6 +429,8 @@ def reward_report(rm, auditor, fit, test, cfg, device, data=None, deadline=None)
     apred = np.concatenate(audit_predictions)
     size = int(max(fit["target"].max(), test["target"].max())) + 1
     counts = np.bincount(fit["target"], minlength=size)
+    from .reward_audit import audit_groups, label_summary, score_tails
+    slice_masks, slice_metadata = audit_groups(fit, test, data)
     heads = {}
     for head, (name, label_key) in enumerate([("completion", "reward"), ("seconds", "seconds")]):
         mean = float(fit[label_key].mean())
@@ -420,23 +451,40 @@ def reward_report(rm, auditor, fit, test, cfg, device, data=None, deadline=None)
                   "paired_mae": paired_interval(baseline_error, error, test["uid"], cfg["evaluation"]["bootstrap"],
                                                cfg["evaluation"]["bootstrap_seed"]),
                   "calibration": [], "slices": {}}
+        report["rmse_definition"] = "sqrt(user-macro MSE); sqrt applied after user averaging in every bootstrap replicate"
+        comparators = {"constant": np.full(len(y), mean),
+                       "item_mean": item_mean[test["target"]],
+                       "auditor": apred[:, head]}
+        for comparator, values in comparators.items():
+            squared = (values - y) ** 2
+            report[f"{comparator}_rmse"] = macro(squared, test["uid"])[0] ** .5
+            # Paired contrasts are history RM minus comparator, on identical users.
+            report[f"history_vs_{comparator}_paired_mae"] = paired_interval(
+                np.abs(values - y), error, test["uid"],
+                cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"])
+            report[f"history_vs_{comparator}_paired_rmse"] = paired_interval(
+                squared, (pred[:, head] - y) ** 2, test["uid"],
+                cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"], root_mse=True)
+        report["paired_rmse"] = report["history_vs_item_mean_paired_rmse"]
         for lo in np.arange(0, 1, .1):
             mask = (pred[:, head] >= lo) & (pred[:, head] < lo + .1 if lo < .9 else pred[:, head] <= 1)
             if mask.any():
                 report["calibration"].append({"lower": float(lo), "n": int(mask.sum()),
+                                              "users": int(len(np.unique(test["uid"][mask]))),
+                                              "bias": float((pred[mask, head] - y[mask]).mean()),
                                               "predicted": float(pred[mask, head].mean()), "observed": float(y[mask].mean())})
-        for label, mask in [("organic", test["organic"] == 1), ("recommended", test["organic"] == 0)]:
-            if mask.any():
-                report["slices"][label] = {"n": int(mask.sum()), "mae": macro(error[mask], test["uid"][mask])[0]}
-        if data is not None:
-            duration = data["durations"][test["target"] - 2]
-            for label, mask in [("duration_lt_180s", duration < 180),
-                                ("duration_180_to_300s", (duration >= 180) & (duration < 300)),
-                                ("duration_ge_300s", duration >= 300)]:
-                if mask.any():
-                    report["slices"][label] = {"n": int(mask.sum()),
-                                              "mae": macro(error[mask], test["uid"][mask])[0],
-                                              "item_mean_mae": macro(baseline_error[mask], test["uid"][mask])[0]}
+        report["history_vs_auditor_paired_mae"] = paired_interval(
+            np.abs(apred[:, head] - y), error, test["uid"],
+            cfg["evaluation"]["bootstrap"], cfg["evaluation"]["bootstrap_seed"])
+        report["calibration_weighting"] = "example means; bias = predicted - observed"
+        report["audit_population"] = "supplied observed targets only; no proposal or append labels"
+        report["slice_metadata"] = slice_metadata
+        report["slice_weighting"] = "user-macro; bias = predicted - observed; paired differences = history RM minus comparator"
+        report["score_tails"] = score_tails(pred[:, head], apred[:, head], y, baseline_error,
+                                             test["uid"], cfg["evaluation"])
+        for label, mask in slice_masks.items():
+            report["slices"][label] = label_summary(mask, pred[:, head], apred[:, head], y,
+                                                    baseline_error, test["uid"], cfg["evaluation"])
         if head == 1:
             report["mae_seconds_proxy"] = report["mae"] * cfg["rl"]["seconds_cap"]
         heads[name] = report

@@ -164,7 +164,7 @@ def prepare_arrays(raw, cfg):
     for offset, name in enumerate(roles_names):
         candidates = np.flatnonzero(singleton & prior_history & (row_roles == offset))
         limit = dc["max_train"] if name == "fit" else dc["max_test"] if name == "test" else dc["max_valid"]
-        chosen = candidates[_bounded_indices(candidates, limit, cfg["seed"] + offset)]
+        chosen = candidates[_bounded_indices(candidates, limit, cfg.get("sample_seed", cfg["seed"]) + offset)]
         retained[chosen] = True
         pre_stats[name] = {"total": len(candidates), "eligible": int((tokens[candidates] >= 2).sum()),
                            "users": len(np.unique(uid[candidates])), "retained": len(chosen)}
@@ -218,7 +218,7 @@ def prepare(path, config, output):
     config = validate_config(config)
     if sha256(path) != config["data"]["sha256"]:
         raise ValueError("Dataset SHA256 differs from protocol")
-    raw, ids = read_sample(path, config["data"]["users"], config["seed"])
+    raw, ids = read_sample(path, config["data"]["users"], config.get("sample_seed", config["seed"]))
     arrays, audit = prepare_arrays(raw, config)
     audit.update(dataset_sha256=sha256(path), selected_uids=ids, config=config)
     out = Path(output)

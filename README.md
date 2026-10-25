@@ -17,7 +17,9 @@
 
 Добавлены отдельный inference-only workflow, полный экспорт входов/весов, проверка eligible-метрик по настоящим targets, tuned-rerank, history-sensitivity и matched append-контроли. Исторические manifests не переписываются. Предоставленные checkpoints и `prepared.npz` сверены по SHA-256; локально повторно восстановлены исторические ranking-метрики и eligible-интервалы. **GPU reanalysis выполнен и проверен:** все 12 completion-hashes совпадают, входы совпадают с историческими, ranking-массивы всех десяти политик восстановлены по targets. Код анализа — `e3cf359`; время inference — **155,75 с**, peak allocated CUDA — **535,5 MiB** (не полный VRAM процесса). Нового обучения не было. [Компактные результаты, plots и независимый разбор](evidence/reanalysis-e3cf359/README.md).
 
-На Windows используйте **`run_windows.bat`**, не DLL:
+**Новый полный запуск на Windows:** `run_windows.bat` без аргументов теперь запускает research-suite: Experiment A на одной фиксированной выборке/SFT/RM, optimization seeds 42/43/44, late-calibration audit, learned item-only comparator, continued-SFT, RL, RL+CE и selection-tuned rerank; полный ZIP64. Это conditional optimization variability, не три full-pipeline seeds; ensemble не обучается. Stage5: отдельный opt-in [ensemble audit](ENSEMBLE_AUDIT.md) проверяет явно экспортированные observed-label NPZ, но не обучает B и не запускается default suite. Это новое обучение, потенциально несколько дней, не inference. [Порядок, ограничения и результаты обсуждения reward](REWARD_DESIGN.md). Старый single pilot: `run_windows.bat pilot`.
+
+На Windows для **inference-only** используйте:
 
 ```bat
 run_windows.bat reanalyze "C:\\path\\to\\uploaded-files"
@@ -386,7 +388,7 @@ rl-recsys evaluate --data data/prepared --run runs/reproduction-seed42 > evaluat
 
 Файл данных проверяется по SHA-256. Используйте новый каталог run. Evaluation проверяет идентичность исходного кода с training provenance и не допускает перезапись готовых результатов. Не редактируйте manifests для обхода проверок.
 
-На Windows доступен `run_windows.bat` из `cmd.exe`: установка окружения, preflight, тесты, данные, обучение, evaluation и упаковка ZIP. Скрипт **запускает полный эксперимент по заданной сетке для reward-голов, прошедших проверку допуска**, а не только проверку установки; перед запуском проверьте GPU/драйвер, конфигурацию и бюджет. Ограничения конфигурации — 36 часов обучения и 120 минут evaluation, **это лимиты, не измеренная длительность**. Прогресс: `progress.jsonl`, логи: `logs/`.
+На Windows исторический single-pilot доступен как `run_windows.bat pilot` из `cmd.exe`: установка окружения, preflight, тесты, данные, обучение, evaluation и упаковка ZIP. Без аргументов запускается новая многосидовая [research-suite](REWARD_DESIGN.md), а не этот исторический pilot. Скрипт **запускает полный эксперимент по заданной сетке для reward-голов, прошедших проверку допуска**, а не только проверку установки; перед запуском проверьте GPU/драйвер, конфигурацию и бюджет. Ограничения конфигурации — 36 часов обучения и 120 минут evaluation, **это лимиты, не измеренная длительность**. Прогресс: `progress.jsonl`, логи: `logs/`.
 
 С теми же временными границами повтор остаётся exploratory reuse. Для новой независимой проверки нужен следующий неиспользованный период. При неудаче reward-gate слабая голова пропускается; если не допущена ни одна запрошенная голова, обучение останавливается до RL без `READY_FOR_TEST.json`.
 
