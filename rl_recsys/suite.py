@@ -51,7 +51,8 @@ def bundle_suite(root, source):
         raise FileExistsError(destination)
     entries = [(p, p.relative_to(root).as_posix()) for p in sorted(root.rglob("*")) if p.is_file()]
     # Source snapshot is small; deliberately exclude environment, Git and other runs.
-    for pattern in ("rl_recsys/*.py", "tests/*.py", "configs/*.json", "*.md", "*.bat", "pyproject.toml"):
+    for pattern in ("rl_recsys/*.py", "tests/*.py", "configs/*.json", "*.md", "docs/**/*.md",
+                    "*.bat", "pyproject.toml"):
         entries += [(p, "source/" + p.relative_to(source).as_posix()) for p in sorted(source.glob(pattern)) if p.is_file()]
     names = [name for _, name in entries]
     if len(names) != len(set(names)) or "SHA256SUMS.json" in names:

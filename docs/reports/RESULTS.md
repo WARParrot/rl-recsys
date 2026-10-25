@@ -19,7 +19,7 @@ The updated Windows/GPU inference completed in **155.75 seconds**, with **535.5 
 - **Matched step-five RM scores (579 users):** SFT policy/random/popularity/replay = **0.759157 / 0.761059 / 0.755318 / 0.723782**; selected RL = **0.756589 / 0.761714 / 0.755798 / 0.723666**. Score growth under random appends is not distinguishable from policy append in paired saved-trajectory intervals. No RL-specific hacking mechanism is established.
 - **Replay limitation:** actual retained contexts are gapped (mean 133,147.9 native units), not consecutive listens or time-matched sessions. Observed labels are scored only at their actual contexts/targets.
 
-[Results, plots, selection and review](evidence/reanalysis-e3cf359/README.md). This is a compact excerpt; large arrays/weights were available for review but are not committed. Item-only RM, richer RM audit, continued-SFT and completion-only follow-up are documented in [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md); a completed Experiment A RL+CE result is not claimed.
+[Results, plots, selection and review](../../evidence/reanalysis-e3cf359/README.md). This is a compact excerpt; large arrays/weights were available for review but are not committed. Item-only RM, richer RM audit, continued-SFT and completion-only follow-up are documented in [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md); a completed Experiment A RL+CE result is not claimed.
 
 ## Historical training run
 
@@ -53,7 +53,7 @@ The calibration role also participates in checkpoint selection, so this is time-
 
 ## Policy results
 
-The historical pilot's original policy tables use **all-target** values for `Exact expected reward` and `Recall@10`; `Eligible NDCG@10` is eligible-target; Coverage and HHI use top-10 lists across all test contexts. The primary eligible exact-reward comparisons are in [README.md](README.md) and must not be mixed with the all-target values.
+The historical pilot's original policy tables use **all-target** values for `Exact expected reward` and `Recall@10`; `Eligible NDCG@10` is eligible-target; Coverage and HHI use top-10 lists across all test contexts. The primary eligible exact-reward comparisons are in [README.md](../../README.md) and must not be mixed with the all-target values.
 The selected policy was `rl_completion_h1_b0.01`, chosen using the declared relevance floor and exact one-step expected completion proxy.
 
 | Policy | Exact expected reward | Eligible NDCG@10 | Recall@10 | Coverage | HHI |

@@ -2,9 +2,9 @@
 
 > This file is retained for provenance and historical detail. Its old pilot tables are **not** the final summary and must not be mixed with the prospective Experiment A contract or completion-only follow-up. The core assignment result is the executed joint-RM pilot described here; the full reviewer archive is available in the [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing).
 
-> **Основной актуальный отчёт — [README.md](README.md).** Разделы 1–8 ниже описывают старый запуск и сохраняются для истории. Раздел 9 содержит последующее объяснение нового запуска; актуальные выводы, источники, метрики и инструкции объединены в README. Старые численные таблицы и замечания о source-byte identity не относятся к релизу v0.2.0-pilot-2.
+> **Основной актуальный отчёт — [README.md](../../README.md).** Разделы 1–8 ниже описывают старый запуск и сохраняются для истории. Раздел 9 содержит последующее объяснение нового запуска; актуальные выводы, источники, метрики и инструкции объединены в README. Старые численные таблицы и замечания о source-byte identity не относятся к релизу v0.2.0-pilot-2.
 
-**Статус:** historical joint-RM restricted pilot; это не доказательство causal/user impact. Проспективный research-suite реализован, но его завершённый результат здесь не заявляется. Completion-only follow-up выполнен отдельно и описан в [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).
+**Статус:** historical joint-RM restricted pilot; это не доказательство causal/user impact. Проспективный research-suite реализован, но его завершённый результат здесь не заявляется. Completion-only follow-up выполнен отдельно и описан в [COMPLETION_RESULTS.md](../reports/COMPLETION_RESULTS.md).
 
 **Provenance qualification:** metadata hashes agree internally, but the supplied run's source-code hashes could not be reconstructed from the recorded Git revision/current checkout, including line-ending checks. Exact source-byte identity remains unverified. Do not treat the revision label alone as proof of the executed source.
 
@@ -149,7 +149,7 @@ The historical pilot recommended the following directions before the later compl
 5. add explicit context-drift and reward-model disagreement diagnostics for H=5;
 6. run additional seeds only with a predeclared success criterion.
 
-The completion-only follow-up has now supplied the reward-variant result described in [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md). The remaining items are prospective extensions, not blockers for documenting the historical pilot.
+The completion-only follow-up has now supplied the reward-variant result described in [COMPLETION_RESULTS.md](../reports/COMPLETION_RESULTS.md). The remaining items are prospective extensions, not blockers for documenting the historical pilot.
 ### Long-term objectives: proposed, not measured in this pilot
 
 A future reward could combine immediate completion with a separate history-conditioned continuation/return head: e.g. another listen within a declared session gap and return during a fixed 7-day horizon, with penalties for repetition/concentration. Timestamp units and the dataset's observation horizon must first be validated. Labels need an adequate future observation window; right-censored examples must be excluded or modeled explicitly, and temporal training/evaluation boundaries must be purged by the label horizon to prevent leakage. No such retention head was trained here.

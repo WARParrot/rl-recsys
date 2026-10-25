@@ -1,11 +1,11 @@
 # One-launch research suite — superseded
 
-**Status: historical implementation plan, superseded.** The scope and seed design below are not the current launch instructions. See [EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md) for the authoritative contract and [REWARD_DESIGN.md](REWARD_DESIGN.md) for shipped APIs. Current Experiment A freezes one prepared sample/SFT/history RM and a learned item-only comparator, then pairs optimization seeds 42/43/44 across RL, RL+CE, continued-SFT and tuned rerank. Optional outer sample seeds are separate robustness runs. Experiment B remains separate and conditional; no new training results are claimed.
+**Status: historical implementation plan, superseded.** The scope and seed design below are not the current launch instructions. See [EXPERIMENT_PROTOCOL.md](../research/EXPERIMENT_PROTOCOL.md) for the authoritative contract and [REWARD_DESIGN.md](../research/REWARD_DESIGN.md) for shipped APIs. Current Experiment A freezes one prepared sample/SFT/history RM and a learned item-only comparator, then pairs optimization seeds 42/43/44 across RL, RL+CE, continued-SFT and tuned rerank. Optional outer sample seeds are separate robustness runs. Experiment B remains separate and conditional; no new training results are claimed.
 
 The remainder is retained only as historical context.
 
 ## Next experiment contract
-[EXPERIMENT_PROTOCOL.md](EXPERIMENT_PROTOCOL.md) is the prospective research contract. The implementation below describes the existing one-launch baseline, **not completion of that contract**. Next work must add fixed-sample matched single-RM RL+CE versus RL/continued-SFT/common-RM tuned rerank (experiment A), fuller reward audits and explicit seed roles. Ensemble mean versus mean-minus-std is separate experiment B, conditional on held-out disagreement/error validation. Do not launch the current repeat-penalty suite as if it implemented A or B.
+[EXPERIMENT_PROTOCOL.md](../research/EXPERIMENT_PROTOCOL.md) is the prospective research contract. The implementation below describes the existing one-launch baseline, **not completion of that contract**. Next work must add fixed-sample matched single-RM RL+CE versus RL/continued-SFT/common-RM tuned rerank (experiment A), fuller reward audits and explicit seed roles. Ensemble mean versus mean-minus-std is separate experiment B, conditional on held-out disagreement/error validation. Do not launch the current repeat-penalty suite as if it implemented A or B.
 
 ## Scope
 Preserve `run_windows.bat pilot` and `reanalyze`; make no-argument launch run a fresh, multi-seed research suite. Do not overwrite historical runs. No publication, GPU training or upload is performed by this code-editing task.

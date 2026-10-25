@@ -1,6 +1,6 @@
 """Opt-in observed-label ensemble hypothesis audit; no training or calibration fit.
 
-See ENSEMBLE_AUDIT.md for the pickle-free NPZ contract and estimands.
+See docs/guides/ENSEMBLE_AUDIT.md for the pickle-free NPZ contract and estimands.
 """
 from __future__ import annotations
 

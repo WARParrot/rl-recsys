@@ -1,6 +1,6 @@
 # Reward design and one-launch Experiment A
 
-**Submission status:** Experiment A is implemented and tested, but this repository does not claim a completed research-suite result. The executed results are the historical joint-RM pilot and the separate completion-only follow-up; see [RESULTS.md](RESULTS.md) and [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md).
+**Submission status:** Experiment A is implemented and tested, but this repository does not claim a completed research-suite result. The executed results are the historical joint-RM pilot and the separate completion-only follow-up; see [RESULTS.md](../reports/RESULTS.md) and [COMPLETION_RESULTS.md](../reports/COMPLETION_RESULTS.md).
 
 ## Implemented default (stage4)
 
@@ -26,7 +26,7 @@ Primary serving rule is one stochastic action at T=1. Primary endpoint is eligib
 
 Late audit includes constant/item-mean baselines, learned item-only comparator, calibration and tied upper-score tails, duration/popularity/repeat/organic slices and paired uncertainty. The operational completion gate remains point MAE improvement >=2% over fit item mean and better than fit constant; passing is not validation of hypothetical-action rewards. Tiny or missing slices remain inconclusive.
 
-**No ensemble is trained.** Stage5 adds only a standalone, opt-in [ensemble hypothesis audit](ENSEMBLE_AUDIT.md) over explicitly exported observed-label NPZ predictions: user-bootstrap tied-rank association and paired common-user decile error contrast, support/degeneracy flags and fit-derived slice associations. It accepts declared identity/uncalibrated scores, fits no calibrator and makes no calibrated claim. Experiment B member training, fitted calibration, export pipeline and uncertainty-penalized policy optimization remain separate, unimplemented work. Optimization seeds and outer sample runs are not ensemble members. Seconds optimization is absent from A. Retention needs mature future labels and a separately justified design.
+**No ensemble is trained.** Stage5 adds only a standalone, opt-in [ensemble hypothesis audit](../guides/ENSEMBLE_AUDIT.md) over explicitly exported observed-label NPZ predictions: user-bootstrap tied-rank association and paired common-user decile error contrast, support/degeneracy flags and fit-derived slice associations. It accepts declared identity/uncalibrated scores, fits no calibrator and makes no calibrated claim. Experiment B member training, fitted calibration, export pipeline and uncertainty-penalized policy optimization remain separate, unimplemented work. Optimization seeds and outer sample runs are not ensemble members. Seconds optimization is absent from A. Retention needs mature future labels and a separately justified design.
 
 ## Commands and seed roles
 

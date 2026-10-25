@@ -1,7 +1,7 @@
 # Методологический аудит simulator-on-policy/model-based RL-рекомендаций
 
 **Статус:** read-only аудит постановки; код не аудировался и не изменялся.  
-**План:** [`../PLAN.md`](../PLAN.md).  
+**План:** [`PLAN.md`](../docs/archive/PLAN.md).
 **Терминология:** далее используется `simulator-on-policy/model-based policy optimization`: траектории on-policy относительно learned simulator/reward model, но **не** относительно реальных пользователей и не causal offline policy evaluation.
 
 Аудированы постановка из `Pasted-text.txt`, планы проекта и источники:

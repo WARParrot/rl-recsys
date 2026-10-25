@@ -21,12 +21,19 @@ def test_bundle_complete_zip64_source_and_hashes(tmp_path):
     source.mkdir()
     (source / 'rl_recsys').mkdir()
     (source / 'rl_recsys' / 'x.py').write_text('source')
+    (source / 'docs' / 'guides').mkdir(parents=True)
+    (source / 'docs' / 'README.md').write_text('documentation index')
+    (source / 'docs' / 'guides' / 'REANALYSIS.md').write_text('reanalysis guide')
+    (source / '.venv').mkdir()
+    (source / '.venv' / 'private.md').write_text('not part of the snapshot')
     (root / 'seed_42' / 'weights.pt').write_bytes(b'weights')
     (root / 'suite.json').write_text('{"status":"failed"}')
     destination = suite.bundle_suite(root, source)
     with zipfile.ZipFile(destination) as z:
         checks = json.loads(z.read('SHA256SUMS.json'))
-        assert {e['path'] for e in checks} == {'seed_42/weights.pt', 'suite.json', 'source/rl_recsys/x.py'}
+        assert {e['path'] for e in checks} == {
+            'seed_42/weights.pt', 'suite.json', 'source/rl_recsys/x.py',
+            'source/docs/README.md', 'source/docs/guides/REANALYSIS.md'}
         for e in checks:
             assert hashlib.sha256(z.read(e['path'])).hexdigest() == e['sha256']
     with pytest.raises(FileExistsError):

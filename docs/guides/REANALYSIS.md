@@ -4,7 +4,7 @@
 
 The supplied nine checkpoints and prepared data match the historical manifests. CPU verification now reconstructs Recall/NDCG directly from target IDs, verifies every saved relevance array, and reconstructs eligible populations, expected-reward aggregates and paired user intervals. This passed on all nine historical policies. It does not replace model inference.
 
-Returned GPU inference on revision `e3cf359` has now been reviewed: **155.75 seconds**, **535.5 MiB peak allocated CUDA memory**. All 12 completion hashes match; exported inputs agree with the historical data and all ten policies' ranking arrays reconstruct from targets. [Compact evidence and interpretation](evidence/reanalysis-e3cf359/README.md).
+Returned GPU inference on revision `e3cf359` has now been reviewed: **155.75 seconds**, **535.5 MiB peak allocated CUDA memory**. All 12 completion hashes match; exported inputs agree with the historical data and all ten policies' ranking arrays reconstruct from targets. [Compact evidence and interpretation](../../evidence/reanalysis-e3cf359/README.md).
 
 Executed diagnostics: selection chooses rerank weight 1; shuffled histories increase completion MAE by 7.04% (CI +3.43% to +10.46%); random/popularity append produce similar score growth to policy append. This strengthens the synthetic-context sensitivity explanation, not an RL-specific hacking claim. Observed replay remains substantially gapped. Fresh training controls below are implemented but **not executed**.
 

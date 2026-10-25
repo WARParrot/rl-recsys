@@ -27,7 +27,7 @@ The implementation has several strong design choices: train-only item vocabulary
 
 ### High: primary relevance estimand is inconsistent between plan and selection
 
-- [`PLAN.md`](../PLAN.md), line 10: primary relevance says user-macro NDCG@10 within train-known eligible catalog; unknown targets score zero in all-target view.
+- [`PLAN.md`](../docs/archive/PLAN.md), line 10: primary relevance says user-macro NDCG@10 within train-known eligible catalog; unknown targets score zero in all-target view.
 - [`experiment.py`](../rl_recsys/experiment.py), lines 244-246: selection relevance floor uses `c["selection"]["ndcg"]`, which is computed by `evaluate` over every target, including unknown-token targets whose target IDs cannot occur in recommendations. This is an all-target metric.
 - `final_evaluation` lines 335-337 builds paired intervals for `ndcg` and `recall`, not `eligible_ndcg`; H2 relevance non-inferiority therefore also uses all-target NDCG. `evaluate` does report `eligible_ndcg`, but that metric is not used for selection or verdict.
 
