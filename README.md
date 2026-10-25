@@ -2,7 +2,7 @@
 
 **Главный результат:** в проведённом эксперименте RL немного увеличил оценку обученной модели вознаграждения, но не дал практически значимого преимущества над исходной моделью и простым переранжированием. Для выбранной политики прирост ожидаемого proxy составил **0,0763%**, а изменение NDCG@10 на доступных целевых объектах — **−1,06%**. Сохранение релевантности в пределах заданного допуска статистически не установлено.
 
-**Полный архив для проверки:** [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing). Архив содержит исторический pilot bundle и checkpoints/prepared data, reanalysis assets, research-suite/completion-follow-up artifacts и SHA-256 manifests. Большие assets не входят в компактный Git excerpt.
+**Полный completion-архив для проверки:** [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing). На момент сдачи папка содержит `completion-20261025-203706-879.zip` и его SHA-256 manifest: prepared data/SFT inputs, historical-joint comparison artifacts, completion-only RM/checkpoints, continued-SFT controls, evaluation arrays, logs, source snapshot и checksums. Исторический pilot/reanalysis bundle не входит в эту папку; его численные результаты и компактные verification excerpts находятся в Git/release-ссылках ниже.
 
 Это **отрицательный исследовательский результат**, а не доказательство бесполезности RL в рекомендациях вообще. Ни удовлетворённость, ни удержание, ни причинное влияние рекомендаций на пользователей здесь не измерялись.
 
@@ -20,12 +20,12 @@
 | Запуск | Фактический статус |
 |---|---|
 | Historical joint-RM pilot | SFT, joint completion/seconds RM и completion-RL policy arms обучены и оценены; seconds-RL был отключён gate. Это основной работающий RL-эксперимент задания. |
-| Research-suite / Experiment A | Реализован и протестирован, но завершённый результат этого suite в репозитории не заявляется. Не смешивать его prospective arms с историческими числами. |
+| Research-suite / Experiment A | Код реализован и тесты пройдены. **Завершённый GPU research-suite result не заявляется**; не трактовать описанные здесь prospective arms как обученные/оценённые модели. |
 | Completion-only follow-up | Новая RM не прошла late gate; обучены только continued-SFT controls. RL, RL+CE и reranking не обучались. См. [COMPLETION_RESULTS.md](COMPLETION_RESULTS.md). |
 
 ## Улучшения после независимого аудита
 
-Добавлены отдельный inference-only workflow, полный экспорт входов/весов, проверка eligible-метрик по настоящим targets, tuned-rerank, history-sensitivity и matched append-контроли. Исторические manifests не переписываются. Предоставленные checkpoints и `prepared.npz` сверены по SHA-256; локально повторно восстановлены исторические ranking-метрики и eligible-интервалы. **GPU reanalysis выполнен и проверен:** все 12 completion-hashes совпадают, входы совпадают с историческими, ranking-массивы всех десяти политик восстановлены по targets. Код анализа — `e3cf359`; время inference — **155,75 с**, peak allocated CUDA — **535,5 MiB** (не полный VRAM процесса). Нового обучения не было. [Компактные результаты, plots и независимый разбор](evidence/reanalysis-e3cf359/README.md).
+Добавлены отдельный inference-only workflow, полный экспорт входов/весов и проверка eligible-метрик по настоящим targets. Исторические manifests не переписываются. Предоставленные checkpoints и `prepared.npz` сверены по SHA-256; локально восстановлены исторические ranking-метрики и eligible-интервалы. **GPU reanalysis выполнен и проверен:** все 12 completion-hashes совпали, входы совпали с историческими, ranking-массивы всех десяти reanalysis policy entries восстановлены по targets. В README policy-таблица ниже использует эти reanalysis-derived eligible exact-reward/NDCG estimates вместе с сохранёнными historical checkpoints; это не новая тренировка. Код анализа — `e3cf359`; время inference — **155,75 с**, peak allocated CUDA — **535,5 MiB** (не полный VRAM процесса).
 
 **Новый полный запуск на Windows:** `run_windows.bat` без аргументов запускает реализованный research-suite / Experiment A: optimization seeds 42/43/44, late-calibration audit, item-only comparator, continued-SFT, RL, RL+CE и selection-tuned rerank; полный ZIP64. **Завершённый результат этого suite в репозитории не заявляется.** Это prospective implementation, а не новые численные данные ниже. Старый single pilot: `run_windows.bat pilot`.
 
@@ -47,7 +47,7 @@ run_windows.bat reanalyze "C:\\path\\to\\uploaded-files"
 
 ### Completion-only follow-up (результат)
 
-[Отдельный отчёт](COMPLETION_RESULTS.md) дополняет исследование новым отрицательным запуском; исторические policy-таблицы и основной README-отчёт не переписаны. Completion-only RM не прошла поздний gate (MAE 0,349361 vs item-mean 0,348721; +0,183%, CI [−2,794%; +3,064%]); поэтому RL/RL+CE/rerank arms не обучались. Запуск завершился тремя continued-SFT controls, чьи eligible-NDCG intervals включают ноль. ZIP и все 109 внутренних checksums проверены. Test и audit уже использовались; результат exploratory reuse, не независимое подтверждение.
+[Отдельный отчёт](COMPLETION_RESULTS.md) дополняет исследование новым отрицательным запуском; его late-audit population — **3 065 примеров / 605 пользователей**. Исторические policy-таблицы и основной README-отчёт не переписаны. Completion-only RM не прошла поздний gate (MAE 0,349361 vs item-mean 0,348721; +0,183%, CI [−2,794%; +3,064%]); поэтому RL/RL+CE/rerank arms не обучались. Запуск завершился тремя continued-SFT controls, чьи eligible-NDCG intervals включают ноль. ZIP и все 109 внутренних checksums проверены. Test и audit уже использовались; результат exploratory reuse, не независимое подтверждение.
 
 Полный архив для проверки: [Google Drive folder](https://drive.google.com/drive/folders/12vRYPFrcBkTOqQ7nwDjYAFQzk78cNk2k?usp=sharing).
 
@@ -200,6 +200,8 @@ Coverage и HHI не равны персонализации или воспри
 ## 5. Результаты
 
 ### 5.1. Качество RM и допуск до RL
+
+Test ниже хронологически отложен от fit/calibration/selection, но временной период уже просматривался в предыдущих итерациях. Поэтому интервалы и сравнения с test в этом отчёте — **exploratory reuse, не независимое подтверждение**.
 
 Проверка на calibration:
 
@@ -468,4 +470,4 @@ print(f'Проверены {len(manifest)} файлов и completion-маниф
 17. **Kaplan, Meier (1958), “Nonparametric Estimation from Incomplete Observations”.** [DOI:10.1080/01621459.1958.10501452](https://doi.org/10.1080/01621459.1958.10501452). Основание обработки неполных наблюдений; не решает confounding и не идентифицирует эффект рекомендаций.
 18. **Petrov, Macdonald (2024), “Aligning GPTRec with Beyond-Accuracy Goals with Reinforcement Learning”.** [arXiv:2403.04875](https://arxiv.org/abs/2403.04875). Близкий прецедент RL-настройки генеративных рекомендаций под вторичные цели; другие данные/цели, не внешняя валидация наших результатов.
 
-**Итог исследования:** реализованы GPT-2 next-item baseline, история-зависимая RM и RL-дообучение с общим временным протоколом оценки. Исторический joint-RM pilot дал отрицательный практический результат; completion-only follow-up не прошёл reward-gate до RL. Результаты не поддерживают user-impact claims. Prospective Experiment A и Experiment B остаются реализованными/описанными направлениями без заявленного завершённого результата; свежий temporal audit остаётся будущей задачей.
+**Итог исследования:** реализованы GPT-2 next-item baseline, история-зависимая RM и RL-дообучение с общим временным протоколом оценки; исторический joint-RM pilot выполнил RL и дал отрицательный практический результат. Completion-only follow-up не прошёл reward-gate до RL. **Experiment A suite реализован, но завершённый suite-run не заявляется; Experiment B ensemble training/calibration/uncertainty-penalized RL не реализованы и не запускались** (есть только opt-in ensemble audit tool). Результаты не поддерживают user-impact claims; свежий temporal audit остаётся будущим направлением.
